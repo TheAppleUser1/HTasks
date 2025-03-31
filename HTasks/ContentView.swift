@@ -246,16 +246,20 @@ struct WelcomeView: View {
             // For the widget, create simplified chore objects without categories since the welcome view
             // doesn't have category information yet
             let widgetChores = chores.map { chore -> [String: Any] in
-                [
+                var choreDict: [String: Any] = [
                     "id": chore.id.uuidString,
                     "title": chore.title,
                     "isCompleted": chore.isCompleted,
-                    "categoryId": nil,
-                    "categoryName": nil,
-                    "categoryColor": nil,
-                    "dueDate": nil,
                     "createdDate": chore.createdDate
                 ]
+                
+                // Add null values explicitly as NSNull()
+                choreDict["categoryId"] = NSNull()
+                choreDict["categoryName"] = NSNull()
+                choreDict["categoryColor"] = NSNull() 
+                choreDict["dueDate"] = NSNull()
+                
+                return choreDict
             }
             
             // Save to the shared App Group container for widget access
