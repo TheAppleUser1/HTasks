@@ -52,8 +52,25 @@ struct SimpleWidgetEntryView : View {
     @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
-        ZStack {
-            // Background gradient
+        VStack(spacing: 10) {
+            // Emoji
+            Text(entry.emoji)
+                .font(.system(size: 60))
+                .shadow(color: .black.opacity(0.2), radius: 1, x: 0, y: 1)
+            
+            // Time
+            Text(entry.date, style: .time)
+                .font(.system(size: 32, weight: .bold, design: .rounded))
+                .foregroundColor(colorScheme == .dark ? .white : .black)
+                .shadow(color: colorScheme == .dark ? .black.opacity(0.3) : .white.opacity(0.5), radius: 1, x: 0, y: 1)
+            
+            // Date
+            Text(entry.date, style: .date)
+                .font(.caption)
+                .foregroundColor(colorScheme == .dark ? .white.opacity(0.9) : .black.opacity(0.9))
+        }
+        .padding()
+        .containerBackground(for: .widget) {
             LinearGradient(
                 gradient: Gradient(colors: colorScheme == .dark ? 
                                   [Color.black, Color.blue.opacity(0.5)] : 
@@ -61,25 +78,6 @@ struct SimpleWidgetEntryView : View {
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
-            
-            VStack(spacing: 10) {
-                // Emoji
-                Text(entry.emoji)
-                    .font(.system(size: 60))
-                    .shadow(color: .black.opacity(0.2), radius: 1, x: 0, y: 1)
-                
-                // Time
-                Text(entry.date, style: .time)
-                    .font(.system(size: 32, weight: .bold, design: .rounded))
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
-                    .shadow(color: colorScheme == .dark ? .black.opacity(0.3) : .white.opacity(0.5), radius: 1, x: 0, y: 1)
-                
-                // Date
-                Text(entry.date, style: .date)
-                    .font(.caption)
-                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.9) : .black.opacity(0.9))
-            }
-            .padding()
         }
     }
 }
@@ -94,7 +92,6 @@ struct HTasksWidget: Widget {
         .configurationDisplayName("Time & Emoji")
         .description("Display the current time with your favorite emoji.")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
-        .contentMarginsDisabled()
     }
 }
 
