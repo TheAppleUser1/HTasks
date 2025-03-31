@@ -42,6 +42,28 @@ struct Chore: Identifiable, Codable {
 struct UserSettings: Codable {
     var showDeleteConfirmation: Bool = true
     var deleteConfirmationText: String = "We offer no liability if your mother gets mad :P"
+    var autoBackupToiCloud: Bool = true
+    
+    static func load() -> UserSettings {
+        if let data = UserDefaults.standard.data(forKey: "userSettings") {
+            do {
+                return try JSONDecoder().decode(UserSettings.self, from: data)
+            } catch {
+                print("Failed to load settings: \(error.localizedDescription)")
+            }
+        }
+        return UserSettings()
+    }
+    
+    func save() {
+        do {
+            let encoded = try JSONEncoder().encode(self)
+            UserDefaults.standard.set(encoded, forKey: "userSettings")
+            UserDefaults.standard.synchronize()
+        } catch {
+            print("Failed to save settings: \(error.localizedDescription)")
+        }
+    }
 }
 
 struct Achievement: Identifiable, Codable {
@@ -470,7 +492,7 @@ struct HomeView: View {
     @State private var selectedCategory: UUID?
     @State private var showingDeleteConfirmation = false
     @State private var choreToDelete: Chore?
-    @State private var settings = UserSettings()
+    @State private var settings = UserSettings.load()
     @Environment(\.colorScheme) var colorScheme
     @State private var statistics = Statistics()
     @State private var achievements: [Achievement] = []
@@ -674,68 +696,13 @@ struct HomeView: View {
                 )
             }
             .sheet(isPresented: $showingSettingsSheet) {
-                // Settings sheet
-                VStack(spacing: 24) {
-                    Text("Settings")
-                        .font(.title)
-                        .fontWeight(.bold)
-                        .foregroundColor(colorScheme == .dark ? .white : .black)
-                        .padding(.top, 20)
-                    
-                    VStack(alignment: .leading, spacing: 20) {
-                        Text("Customization")
-                            .font(.headline)
-                            .foregroundColor(colorScheme == .dark ? .white : .black)
-                        
-                        Toggle("Show Confirmation when clicking delete", isOn: $settings.showDeleteConfirmation)
-                            .onChange(of: settings.showDeleteConfirmation) { _, newValue in
-                                saveSettings()
-                            }
-                            .foregroundColor(colorScheme == .dark ? .white : .black)
-                        
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("Change the Confirmation text when clicking delete")
-                                .foregroundColor(settings.showDeleteConfirmation ? 
-                                               (colorScheme == .dark ? .white : .black) : 
-                                               (colorScheme == .dark ? .white.opacity(0.4) : .black.opacity(0.4)))
-                            
-                            TextField("Confirmation message", text: $settings.deleteConfirmationText)
-                                .padding()
-                                .background(
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
-                                        .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
-                                )
-                                .disabled(!settings.showDeleteConfirmation)
-                                .opacity(settings.showDeleteConfirmation ? 1.0 : 0.4)
-                                .onChange(of: settings.deleteConfirmationText) { _, newValue in
-                                    saveSettings()
-                                }
-                        }
-                    }
-                    .padding(.horizontal)
-                    
-                    Spacer()
-                    
-                    Button(action: {
-                        showingSettingsSheet = false
-                    }) {
-                        Text("Done")
-                            .fontWeight(.medium)
-                            .padding()
-                            .frame(maxWidth: .infinity)
-                            .background(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .fill(colorScheme == .dark ? Color.blue.opacity(0.7) : Color.blue)
-                            )
-                            .foregroundColor(colorScheme == .dark ? .white : .black)
-                    }
-                    .padding()
-                }
-                .background(
-                    colorScheme == .dark ? Color.black : Color.white
+                SettingsView(
+                    settings: $settings,
+                    chores: $chores,
+                    categories: $categories,
+                    statistics: $statistics,
+                    achievements: $achievements
                 )
-                .presentationDetents([.medium])
             }
             .sheet(isPresented: $showingCategoryManagement) {
                 CategoryManagementView(categories: $categories)
@@ -784,7 +751,7 @@ struct HomeView: View {
             let encoded = try JSONEncoder().encode(chores)
             UserDefaults.standard.set(encoded, forKey: "savedChores")
             UserDefaults.standard.synchronize()
-            syncWithCloud()
+            handleAutoBackup()
         } catch {
             print("Failed to save chores: \(error.localizedDescription)")
         }
@@ -802,17 +769,6 @@ struct HomeView: View {
         } else {
             // Use default settings already initialized
             print("No saved settings found in UserDefaults, using defaults")
-        }
-    }
-    
-    private func saveSettings() {
-        do {
-            let encoded = try JSONEncoder().encode(settings)
-            UserDefaults.standard.set(encoded, forKey: "userSettings")
-            UserDefaults.standard.synchronize()
-            print("Successfully saved user settings")
-        } catch {
-            print("Failed to encode settings: \(error.localizedDescription)")
         }
     }
     
@@ -880,7 +836,7 @@ struct HomeView: View {
             let encoded = try JSONEncoder().encode(statistics)
             UserDefaults.standard.set(encoded, forKey: "statistics")
             UserDefaults.standard.synchronize()
-            syncWithCloud()
+            handleAutoBackup()
         } catch {
             print("Failed to save statistics: \(error.localizedDescription)")
         }
@@ -911,7 +867,7 @@ struct HomeView: View {
             let encoded = try JSONEncoder().encode(achievements)
             UserDefaults.standard.set(encoded, forKey: "achievements")
             UserDefaults.standard.synchronize()
-            syncWithCloud()
+            handleAutoBackup()
         } catch {
             print("Failed to save achievements: \(error.localizedDescription)")
         }
@@ -981,6 +937,12 @@ struct HomeView: View {
                 syncErrorMessage = error.localizedDescription
                 showingSyncError = true
             }
+        }
+    }
+    
+    private func handleAutoBackup() {
+        if settings.autoBackupToiCloud {
+            syncWithCloud()
         }
     }
 }
@@ -1060,7 +1022,7 @@ struct CategoryManagementView: View {
             let encoded = try JSONEncoder().encode(categories)
             UserDefaults.standard.set(encoded, forKey: "savedCategories")
             UserDefaults.standard.synchronize()
-            syncWithCloud()
+            handleAutoBackup()
         } catch {
             print("Failed to save categories: \(error.localizedDescription)")
         }
@@ -1236,6 +1198,99 @@ struct StatRow: View {
             Spacer()
             Text(value)
                 .foregroundColor(.gray)
+        }
+    }
+}
+
+struct SettingsView: View {
+    @Binding var settings: UserSettings
+    @Binding var chores: [Chore]
+    @Binding var categories: [Category]
+    @Binding var statistics: Statistics
+    @Binding var achievements: [Achievement]
+    @Environment(\.dismiss) var dismiss
+    @State private var showingBackupSuccess = false
+    @State private var showingBackupError = false
+    @State private var backupErrorMessage = ""
+    @State private var isBackingUp = false
+    @StateObject private var cloudKitManager = CloudKitManager.shared
+    
+    var body: some View {
+        NavigationView {
+            Form {
+                Section(header: Text("Delete Confirmation")) {
+                    Toggle("Show confirmation when deleting", isOn: $settings.showDeleteConfirmation)
+                    
+                    if settings.showDeleteConfirmation {
+                        TextField("Delete confirmation message", text: $settings.deleteConfirmationText)
+                            .foregroundColor(.gray)
+                    }
+                }
+                
+                Section(header: Text("iCloud Backup")) {
+                    Button(action: {
+                        Task {
+                            await performBackup()
+                        }
+                    }) {
+                        HStack {
+                            Text("Backup Now")
+                            Spacer()
+                            if isBackingUp {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle())
+                            } else {
+                                Image(systemName: "arrow.triangle.2.circlepath")
+                            }
+                        }
+                    }
+                    .disabled(isBackingUp)
+                    
+                    Toggle("Automatic iCloud Backup", isOn: $settings.autoBackupToiCloud)
+                        .onChange(of: settings.autoBackupToiCloud) { oldValue, newValue in
+                            settings.save()
+                        }
+                    
+                    if let lastSync = cloudKitManager.lastSyncDate {
+                        Text("Last backup: \(lastSync.formatted(.relative(presentation: .named)))")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                    }
+                }
+            }
+            .navigationTitle("Settings")
+            .navigationBarItems(trailing: Button("Done") { dismiss() })
+            .alert("Backup Successful", isPresented: $showingBackupSuccess) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text("Your data has been successfully backed up to iCloud.")
+            }
+            .alert("Backup Failed", isPresented: $showingBackupError) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(backupErrorMessage)
+            }
+        }
+    }
+    
+    private func performBackup() async {
+        isBackingUp = true
+        defer { isBackingUp = false }
+        
+        do {
+            try await cloudKitManager.syncChores(chores)
+            try await cloudKitManager.syncCategories(categories)
+            try await cloudKitManager.syncStatistics(statistics)
+            try await cloudKitManager.syncAchievements(achievements)
+            
+            await MainActor.run {
+                showingBackupSuccess = true
+            }
+        } catch {
+            await MainActor.run {
+                backupErrorMessage = error.localizedDescription
+                showingBackupError = true
+            }
         }
     }
 }
