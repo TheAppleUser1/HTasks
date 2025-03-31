@@ -83,17 +83,38 @@ struct Achievement: Identifiable, Codable {
 }
 
 struct Statistics: Codable {
-    var totalCompleted: Int
-    var currentStreak: Int
-    var bestStreak: Int
+    var totalCompleted: Int = 0
+    var currentStreak: Int = 0
+    var bestStreak: Int = 0
     var lastCompletionDate: Date?
-    var categoryCompletions: [UUID: Int]
+    var categoryCompletions: [UUID: Int] = [:]
     
     init() {
-        totalCompleted = 0
-        currentStreak = 0
-        bestStreak = 0
-        categoryCompletions = [:]
+        // Empty init is fine since we have default values
+    }
+    
+    mutating func updateForChoreCompletion(chore: Chore) {
+        totalCompleted += 1
+        
+        if let categoryId = chore.categoryId {
+            categoryCompletions[categoryId, default: 0] += 1
+        }
+        
+        if let lastCompletion = lastCompletionDate {
+            let calendar = Calendar.current
+            let daysSinceLastCompletion = calendar.dateComponents([.day], from: lastCompletion, to: Date()).day ?? 0
+            
+            if daysSinceLastCompletion == 1 {
+                currentStreak += 1
+                bestStreak = max(bestStreak, currentStreak)
+            } else if daysSinceLastCompletion > 1 {
+                currentStreak = 1
+            }
+        } else {
+            currentStreak = 1
+        }
+        
+        lastCompletionDate = Date()
     }
 }
 
@@ -112,29 +133,36 @@ class CloudKitManager: ObservableObject {
         
         // Check iCloud status
         Task {
-            do {
-                try await checkAccountStatus()
-                isAvailable = true
-            } catch {
-                print("iCloud not available: \(error.localizedDescription)")
-                isAvailable = false
-            }
+            await checkAccountStatus()
         }
     }
     
-    private func checkAccountStatus() async throws {
-        let accountStatus = try await container.accountStatus()
-        switch accountStatus {
-        case .available:
-            return
-        case .noAccount:
-            throw NSError(domain: "CloudKit", code: 1, userInfo: [NSLocalizedDescriptionKey: "No iCloud account found"])
-        case .restricted:
-            throw NSError(domain: "CloudKit", code: 2, userInfo: [NSLocalizedDescriptionKey: "iCloud access is restricted"])
-        case .couldNotDetermine:
-            throw NSError(domain: "CloudKit", code: 3, userInfo: [NSLocalizedDescriptionKey: "Could not determine iCloud status"])
-        @unknown default:
-            throw NSError(domain: "CloudKit", code: 4, userInfo: [NSLocalizedDescriptionKey: "Unknown iCloud status"])
+    func checkAccountStatus() async {
+        do {
+            let accountStatus = try await container.accountStatus()
+            DispatchQueue.main.async {
+                switch accountStatus {
+                case .available:
+                    self.isAvailable = true
+                case .noAccount:
+                    print("No iCloud account")
+                    self.isAvailable = false
+                case .restricted:
+                    print("iCloud restricted")
+                    self.isAvailable = false
+                case .couldNotDetermine:
+                    print("Could not determine iCloud status")
+                    self.isAvailable = false
+                @unknown default:
+                    print("Unknown iCloud status")
+                    self.isAvailable = false
+                }
+            }
+        } catch {
+            print("Error checking iCloud status: \(error)")
+            DispatchQueue.main.async {
+                self.isAvailable = false
+            }
         }
     }
     
@@ -149,7 +177,9 @@ class CloudKitManager: ObservableObject {
         
         // Delete existing records
         let query = CKQuery(recordType: "Chore", predicate: NSPredicate(value: true))
-        let (_, records, _) = try await database.records(matching: query)
+        let result = try await database.records(matching: query)
+        let records = result.matchResults.compactMap { try? $0.1.get() }
+        
         for record in records {
             try await database.deleteRecord(withID: record.recordID)
         }
@@ -190,28 +220,30 @@ class CloudKitManager: ObservableObject {
     
     func syncStatistics(_ statistics: Statistics) async throws {
         guard isAvailable else {
-            throw NSError(domain: "CloudKit", code: 5, userInfo: [NSLocalizedDescriptionKey: "iCloud is not available"])
+            throw CloudKitError.iCloudNotAvailable
         }
         
-        let query = CKQuery(recordType: "Statistics", predicate: NSPredicate(value: true))
-        let (_, records, _) = try await database.records(matching: query)
-        for record in records {
-            try await database.deleteRecord(withID: record.recordID)
+        let recordID = CKRecord.ID(recordType: "Statistics")
+        let record = CKRecord(recordID: recordID)
+        
+        record["totalCompleted"] = statistics.totalCompleted as CKRecordValue
+        record["currentStreak"] = statistics.currentStreak as CKRecordValue
+        record["bestStreak"] = statistics.bestStreak as CKRecordValue
+        if let lastCompletionDate = statistics.lastCompletionDate {
+            record["lastCompletionDate"] = lastCompletionDate as CKRecordValue
         }
         
-        let record = CKRecord(recordType: "Statistics")
-        record.setValue(statistics.totalCompleted, forKey: "totalCompleted")
-        record.setValue(statistics.currentStreak, forKey: "currentStreak")
-        record.setValue(statistics.bestStreak, forKey: "bestStreak")
-        record.setValue(statistics.lastCompletionDate, forKey: "lastCompletionDate")
+        // Convert UUID dictionary to string keys for CloudKit storage
+        let categoryCompletionsStringKeys = statistics.categoryCompletions.reduce(into: [:]) { result, entry in
+            result[entry.key.uuidString] = entry.value
+        }
+        record["categoryCompletions"] = categoryCompletionsStringKeys as CKRecordValue
         
-        // Convert UUID keys to strings for CloudKit storage
-        let categoryCompletions = Dictionary(uniqueKeysWithValues: statistics.categoryCompletions.map { 
-            ($0.key.uuidString, $0.value)
-        })
-        record.setValue(categoryCompletions, forKey: "categoryCompletions")
-        
-        try await database.save(record)
+        do {
+            _ = try await database.save(record)
+        } catch {
+            throw CloudKitError.saveFailed(error)
+        }
     }
     
     func syncAchievements(_ achievements: [Achievement]) async throws {
@@ -239,7 +271,8 @@ class CloudKitManager: ObservableObject {
     
     func fetchChores() async throws -> [Chore] {
         let query = CKQuery(recordType: "Chore", predicate: NSPredicate(value: true))
-        let (_, records, _) = try await database.records(matching: query)
+        let result = try await database.records(matching: query)
+        let records = result.matchResults.compactMap { try? $0.1.get() }
         
         return records.compactMap { record in
             guard let title = record.value(forKey: "title") as? String else { return nil }
@@ -247,9 +280,10 @@ class CloudKitManager: ObservableObject {
             let categoryIdString = record.value(forKey: "categoryId") as? String
             let categoryId = categoryIdString.flatMap { UUID(uuidString: $0) }
             let dueDate = record.value(forKey: "dueDate") as? Date
+            let creationDate = record.value(forKey: "creationDate") as? Date ?? Date()
             
             return Chore(
-                id: record.recordID.recordName,
+                id: UUID(uuidString: record.recordID.recordName) ?? UUID(),
                 title: title,
                 isCompleted: isCompleted,
                 categoryId: categoryId,
@@ -260,14 +294,15 @@ class CloudKitManager: ObservableObject {
     
     func fetchCategories() async throws -> [Category] {
         let query = CKQuery(recordType: "Category", predicate: NSPredicate(value: true))
-        let (_, records, _) = try await database.records(matching: query)
+        let result = try await database.records(matching: query)
+        let records = result.matchResults.compactMap { try? $0.1.get() }
         
         return records.compactMap { record in
             guard let name = record.value(forKey: "name") as? String,
                   let color = record.value(forKey: "color") as? String else { return nil }
             
             return Category(
-                id: record.recordID.recordName,
+                id: UUID(uuidString: record.recordID.recordName) ?? UUID(),
                 name: name,
                 color: color
             )
@@ -275,24 +310,43 @@ class CloudKitManager: ObservableObject {
     }
     
     func fetchStatistics() async throws -> Statistics {
+        guard isAvailable else {
+            throw CloudKitError.iCloudNotAvailable
+        }
+        
         let query = CKQuery(recordType: "Statistics", predicate: NSPredicate(value: true))
-        let (_, records, _) = try await database.records(matching: query)
         
-        guard let record = records.first else { return Statistics() }
-        
-        let statistics = Statistics()
-        statistics.totalCompleted = record.value(forKey: "totalCompleted") as? Int ?? 0
-        statistics.currentStreak = record.value(forKey: "currentStreak") as? Int ?? 0
-        statistics.bestStreak = record.value(forKey: "bestStreak") as? Int ?? 0
-        statistics.lastCompletionDate = record.value(forKey: "lastCompletionDate") as? Date
-        statistics.categoryCompletions = record.value(forKey: "categoryCompletions") as? [String: Int] ?? [:]
-        
-        return statistics
+        do {
+            let (results, _) = try await database.records(matching: query)
+            if let record = results.first?.1.record {
+                var statistics = Statistics()
+                
+                statistics.totalCompleted = record["totalCompleted"] as? Int ?? 0
+                statistics.currentStreak = record["currentStreak"] as? Int ?? 0
+                statistics.bestStreak = record["bestStreak"] as? Int ?? 0
+                statistics.lastCompletionDate = record["lastCompletionDate"] as? Date
+                
+                // Convert string keys back to UUID for categoryCompletions
+                if let stringKeyCompletions = record["categoryCompletions"] as? [String: Int] {
+                    statistics.categoryCompletions = stringKeyCompletions.reduce(into: [:]) { result, entry in
+                        if let uuid = UUID(uuidString: entry.key) {
+                            result[uuid] = entry.value
+                        }
+                    }
+                }
+                
+                return statistics
+            }
+            return Statistics()
+        } catch {
+            throw CloudKitError.fetchFailed(error)
+        }
     }
     
     func fetchAchievements() async throws -> [Achievement] {
         let query = CKQuery(recordType: "Achievement", predicate: NSPredicate(value: true))
-        let (_, records, _) = try await database.records(matching: query)
+        let result = try await database.records(matching: query)
+        let records = result.matchResults.compactMap { try? $0.1.get() }
         
         return records.compactMap { record in
             guard let title = record.value(forKey: "title") as? String,
@@ -306,7 +360,7 @@ class CloudKitManager: ObservableObject {
             }
             
             return Achievement(
-                id: record.recordID.recordName,
+                id: UUID(uuidString: record.recordID.recordName) ?? UUID(),
                 title: title,
                 description: description,
                 icon: icon,
@@ -316,6 +370,13 @@ class CloudKitManager: ObservableObject {
             )
         }
     }
+}
+
+enum CloudKitError: Error {
+    case iCloudNotAvailable
+    case saveFailed(Error)
+    case fetchFailed(Error)
+    case deleteFailed(Error)
 }
 
 class AIMotivationManager: ObservableObject {
@@ -433,7 +494,7 @@ struct ContentView: View {
             if isWelcomeActive {
                 WelcomeView(chores: $chores, isWelcomeActive: $isWelcomeActive)
             } else {
-                HomeView(chores: $chores)
+                HomeView(chores: $chores, categories: $chores, statistics: $chores, achievements: $chores)
             }
         }
         .navigationViewStyle(StackNavigationViewStyle())
@@ -539,257 +600,77 @@ struct WelcomeView: View {
 
 struct HomeView: View {
     @Binding var chores: [Chore]
+    @Binding var categories: [Category]
+    @Binding var statistics: Statistics
+    @Binding var achievements: [Achievement]
+    @StateObject private var cloudKit = CloudKitManager()
     @State private var showingAddChore = false
     @State private var showingSettingsSheet = false
-    @State private var showingCategoryManagement = false
-    @State private var categories: [Category] = []
-    @State private var selectedCategory: UUID?
-    @State private var showingDeleteConfirmation = false
+    @AppStorage("settings") private var settings = UserSettings()
+    @StateObject private var notificationManager = NotificationManager()
+    @StateObject private var motivationManager = AIMotivationManager()
+    @State private var showingDeleteAlert = false
     @State private var choreToDelete: Chore?
-    @State private var settings = UserSettings.load()
-    @Environment(\.colorScheme) var colorScheme
-    @State private var statistics = Statistics()
-    @State private var achievements: [Achievement] = []
-    @State private var showingStatistics = false
-    @State private var showingAchievements = false
-    @StateObject private var cloudKitManager = CloudKitManager.shared
+    @State private var syncError: Error?
     @State private var showingSyncError = false
-    @State private var syncErrorMessage = ""
-    @StateObject private var notificationManager = NotificationManager.shared
     
-    var completedChoresCount: Int {
-        chores.filter { $0.isCompleted }.count
-    }
-    
-    var filteredChores: [Chore] {
-        if let categoryId = selectedCategory {
-            return chores.filter { $0.categoryId == categoryId }
-        }
-        return chores
-    }
-    
-    var body: some View {
-        NavigationView {
-            ZStack {
-                VStack(spacing: 0) {
-                    // Category ScrollView
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 12) {
-                            CategoryButton(title: "All", isSelected: selectedCategory == nil) {
-                                selectedCategory = nil
-                            }
-                            
-                            ForEach(categories) { category in
-                                CategoryButton(
-                                    title: category.name,
-                                    color: Color(category.color),
-                                    isSelected: selectedCategory == category.id
-                                ) {
-                                    selectedCategory = category.id
-                                }
-                            }
-                        }
-                        .padding(.horizontal)
-                    }
-                    .padding(.vertical, 8)
-                    
-                    // VisionOS style header with completed chores count
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Number of chores done this week:")
-                            .font(.headline)
-                            .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
-                        
-                        HStack(alignment: .bottom, spacing: 8) {
-                            Text("\(completedChoresCount)")
-                                .font(.system(size: 60, weight: .bold, design: .rounded))
-                                .foregroundColor(colorScheme == .dark ? .white : .black)
-                            
-                            if completedChoresCount == 0 {
-                                Text("u lazy or sum?")
-                                    .font(.system(size: 12))
-                                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .black.opacity(0.6))
-                                    .padding(.bottom, 12)
-                            }
+    private func saveChores() {
+        if let encoded = try? JSONEncoder().encode(chores) {
+            UserDefaults.standard.set(encoded, forKey: "chores")
+            UserDefaults.standard.synchronize()
+            
+            // Sync to iCloud if available
+            if cloudKit.isAvailable {
+                Task {
+                    do {
+                        try await cloudKit.syncChores(chores)
+                    } catch {
+                        DispatchQueue.main.async {
+                            syncError = error
+                            showingSyncError = true
                         }
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding()
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.gray.opacity(0.1))
-                    )
-                    .padding(.horizontal)
-                    .padding(.top)
-                    
-                    // Chore list with VisionOS-style design
-                    List {
-                        ForEach(filteredChores) { chore in
-                            HStack {
-                                Text(chore.title)
-                                    .font(.headline)
-                                    .foregroundColor(
-                                        chore.isCompleted ? 
-                                            (colorScheme == .dark ? .white.opacity(0.5) : .black.opacity(0.5)) : 
-                                            (colorScheme == .dark ? .white : .black)
-                                    )
-                                    .strikethrough(chore.isCompleted)
-                                
-                                Spacer()
-                                
-                                // Checkmark button
-                                Button(action: {
-                                    toggleChoreCompletion(chore)
-                                }) {
-                                    Image(systemName: chore.isCompleted ? "checkmark.circle.fill" : "circle")
-                                        .font(.title2)
-                                        .foregroundColor(colorScheme == .dark ? .white : .black)
-                                        .padding(5)
-                                        .contentShape(Rectangle())
-                                }
-                                .buttonStyle(BorderlessButtonStyle())
-                                
-                                // Delete button
-                                Button(action: {
-                                    choreToDelete = chore
-                                    if settings.showDeleteConfirmation {
-                                        showingDeleteConfirmation = true
-                                    } else {
-                                        deleteChore(chore)
-                                    }
-                                }) {
-                                    Image(systemName: "trash.fill")
-                                        .font(.title2)
-                                        .foregroundColor(colorScheme == .dark ? .white : .black)
-                                        .padding(5)
-                                        .contentShape(Rectangle())
-                                }
-                                .buttonStyle(BorderlessButtonStyle())
-                            }
-                            .padding(.vertical, 8)
-                            .listRowBackground(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
-                                    .padding(EdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8))
-                            )
-                            .listRowSeparator(.hidden)
-                            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-                        }
-                    }
-                    .listStyle(PlainListStyle())
-                    .background(Color.clear)
-                    .alert(isPresented: $showingDeleteConfirmation) {
-                        Alert(
-                            title: Text("Are you sure you want to delete this chore?"),
-                            message: Text(settings.deleteConfirmationText),
-                            primaryButton: .destructive(Text("Delete").foregroundColor(colorScheme == .dark ? .white : .black)) {
-                                if let choreToDelete = choreToDelete {
-                                    deleteChore(choreToDelete)
-                                }
-                            },
-                            secondaryButton: .cancel(Text("No").foregroundColor(colorScheme == .dark ? .white : .black))
-                        )
-                    }
                 }
-                
-                // Floating add button
-                VStack {
-                    Spacer()
-                    HStack {
-                        Spacer()
-                        Button(action: {
-                            showingAddChore = true
-                        }) {
-                            Image(systemName: "plus")
-                                .font(.title)
-                                .fontWeight(.bold)
-                                .foregroundColor(colorScheme == .dark ? .black : .white)
-                                .frame(width: 60, height: 60)
-                                .background(
-                                    Circle()
-                                        .fill(colorScheme == .dark ? .white : .black)
-                                        .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
-                                )
-                        }
-                        .padding(.trailing, 20)
-                        .padding(.bottom, 20)
-                    }
-                }
-            }
-            .navigationTitle("My Chores")
-            .navigationBarItems(
-                leading: HStack {
-                    Button(action: { showingCategoryManagement = true }) {
-                        Image(systemName: "folder.fill")
-                    }
-                    Button(action: { showingStatistics = true }) {
-                        Image(systemName: "chart.bar.fill")
-                    }
-                    Button(action: { showingAchievements = true }) {
-                        Image(systemName: "trophy.fill")
-                    }
-                    Button(action: syncWithCloud) {
-                        Image(systemName: "arrow.triangle.2.circlepath")
-                    }
-                },
-                trailing: Button(action: { showingSettingsSheet = true }) {
-                    Image(systemName: "gearshape.fill")
-                }
-            )
-            .alert("Sync Error", isPresented: $showingSyncError) {
-                Button("OK", role: .cancel) { }
-            } message: {
-                Text(syncErrorMessage)
-            }
-            .sheet(isPresented: $showingAddChore) {
-                AddChoreView(
-                    chores: $chores,
-                    isPresented: $showingAddChore,
-                    categories: categories,
-                    statistics: statistics,
-                    notificationManager: notificationManager
-                )
-            }
-            .sheet(isPresented: $showingSettingsSheet) {
-                SettingsView(
-                    settings: $settings,
-                    chores: $chores,
-                    categories: $categories,
-                    statistics: $statistics,
-                    achievements: $achievements
-                )
-            }
-            .sheet(isPresented: $showingCategoryManagement) {
-                CategoryManagementView(categories: $categories)
-            }
-            .sheet(isPresented: $showingStatistics) {
-                NavigationView {
-                    StatisticsView(statistics: statistics, categories: categories)
-                }
-            }
-            .sheet(isPresented: $showingAchievements) {
-                NavigationView {
-                    AchievementView(achievements: achievements)
-                }
-            }
-            .onAppear {
-                loadSettings()
-                loadCategories()
-                loadStatistics()
-                loadAchievements()
-                loadFromCloud()
-                notificationManager.requestAuthorization()
             }
         }
     }
     
-    private func toggleChoreCompletion(_ chore: Chore) {
+    private func saveStatistics() {
+        if let encoded = try? JSONEncoder().encode(statistics) {
+            UserDefaults.standard.set(encoded, forKey: "statistics")
+            UserDefaults.standard.synchronize()
+            
+            // Sync to iCloud if available
+            if cloudKit.isAvailable {
+                Task {
+                    do {
+                        try await cloudKit.syncStatistics(statistics)
+                    } catch {
+                        DispatchQueue.main.async {
+                            syncError = error
+                            showingSyncError = true
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    private func completeChore(_ chore: Chore) {
         if let index = chores.firstIndex(where: { $0.id == chore.id }) {
-            chores[index].isCompleted.toggle()
-            if chores[index].isCompleted {
-                updateStatistics(for: chore)
-                notificationManager.cancelNotification(for: chore.id)
-            }
+            chores[index].isCompleted = true
+            chores[index].completedDate = Date()
+            statistics.updateForChoreCompletion(chore: chores[index])
+            
             saveChores()
+            saveStatistics()
+            checkAchievements()
+            
+            // Cancel notification for completed chore
+            notificationManager.cancelNotification(for: chore.id)
+            
+            // Show motivation message
+            motivationManager.showMotivationMessage()
         }
     }
     
@@ -797,206 +678,75 @@ struct HomeView: View {
         if let index = chores.firstIndex(where: { $0.id == chore.id }) {
             chores.remove(at: index)
             saveChores()
-        }
-    }
-    
-    private func saveChores() {
-        do {
-            let encoded = try JSONEncoder().encode(chores)
-            UserDefaults.standard.set(encoded, forKey: "savedChores")
-            UserDefaults.standard.synchronize()
-            handleAutoBackup()
-        } catch {
-            print("Failed to save chores: \(error.localizedDescription)")
-        }
-    }
-    
-    private func loadSettings() {
-        if let savedSettings = UserDefaults.standard.data(forKey: "userSettings") {
-            do {
-                let decodedSettings = try JSONDecoder().decode(UserSettings.self, from: savedSettings)
-                self.settings = decodedSettings
-                print("Loaded user settings from UserDefaults")
-            } catch {
-                print("Failed to decode settings: \(error.localizedDescription)")
-            }
-        } else {
-            // Use default settings already initialized
-            print("No saved settings found in UserDefaults, using defaults")
-        }
-    }
-    
-    private func loadCategories() {
-        if let data = UserDefaults.standard.data(forKey: "savedCategories") {
-            do {
-                categories = try JSONDecoder().decode([Category].self, from: data)
-            } catch {
-                print("Failed to load categories: \(error.localizedDescription)")
-            }
-        }
-    }
-    
-    private func loadStatistics() {
-        if let data = UserDefaults.standard.data(forKey: "statistics") {
-            do {
-                statistics = try JSONDecoder().decode(Statistics.self, from: data)
-            } catch {
-                print("Failed to load statistics: \(error.localizedDescription)")
-            }
-        }
-    }
-    
-    private func loadAchievements() {
-        if let data = UserDefaults.standard.data(forKey: "achievements") {
-            do {
-                achievements = try JSONDecoder().decode([Achievement].self, from: data)
-            } catch {
-                achievements = defaultAchievements
-            }
-        } else {
-            achievements = defaultAchievements
-        }
-    }
-    
-    private func updateStatistics(for chore: Chore) {
-        statistics.totalCompleted += 1
-        
-        if let categoryId = chore.categoryId {
-            statistics.categoryCompletions[categoryId, default: 0] += 1
-        }
-        
-        if let lastCompletion = statistics.lastCompletionDate {
-            let calendar = Calendar.current
-            let daysSinceLastCompletion = calendar.dateComponents([.day], from: lastCompletion, to: Date()).day ?? 0
             
-            if daysSinceLastCompletion == 1 {
-                statistics.currentStreak += 1
-                statistics.bestStreak = max(statistics.bestStreak, statistics.currentStreak)
-            } else if daysSinceLastCompletion > 1 {
-                statistics.currentStreak = 1
-            }
-        } else {
-            statistics.currentStreak = 1
-        }
-        
-        statistics.lastCompletionDate = Date()
-        
-        saveStatistics()
-        checkAchievements()
-    }
-    
-    private func saveStatistics() {
-        do {
-            let encoded = try JSONEncoder().encode(statistics)
-            UserDefaults.standard.set(encoded, forKey: "statistics")
-            UserDefaults.standard.synchronize()
-            handleAutoBackup()
-        } catch {
-            print("Failed to save statistics: \(error.localizedDescription)")
+            // Cancel notification for deleted chore
+            notificationManager.cancelNotification(for: chore.id)
         }
     }
     
-    private func checkAchievements() {
-        for (index, achievement) in achievements.enumerated() {
-            var shouldUnlock = false
-            
-            switch achievement.type {
-            case .totalCompleted:
-                shouldUnlock = statistics.totalCompleted >= achievement.requirement
-            case .streak:
-                shouldUnlock = statistics.currentStreak >= achievement.requirement
-            case .categoryCompletion:
-                shouldUnlock = statistics.categoryCompletions.values.contains { $0 >= achievement.requirement }
-            }
-            
-            if shouldUnlock && !achievement.isUnlocked {
-                achievements[index].isUnlocked = true
-                saveAchievements()
-            }
-        }
-    }
-    
-    private func saveAchievements() {
-        do {
-            let encoded = try JSONEncoder().encode(achievements)
-            UserDefaults.standard.set(encoded, forKey: "achievements")
-            UserDefaults.standard.synchronize()
-            handleAutoBackup()
-        } catch {
-            print("Failed to save achievements: \(error.localizedDescription)")
-        }
-    }
-    
-    private func defaultAchievements: [Achievement] {
-        [
-            Achievement(
-                id: UUID(),
-                title: "Getting Started",
-                description: "Complete your first chore",
-                icon: "star.fill",
-                requirement: 1,
-                type: .totalCompleted,
-                isUnlocked: statistics.totalCompleted >= 1
-            ),
-            Achievement(
-                id: UUID(),
-                title: "Streak Master",
-                description: "Maintain a 7-day streak",
-                icon: "flame.fill",
-                requirement: 7,
-                type: .streak,
-                isUnlocked: statistics.currentStreak >= 7
-            ),
-            Achievement(
-                id: UUID(),
-                title: "Category Expert",
-                description: "Complete 5 chores in a single category",
-                icon: "folder.fill",
-                requirement: 5,
-                type: .categoryCompletion,
-                isUnlocked: statistics.categoryCompletions.values.contains { $0 >= 5 }
-            )
-        ]
-    }
-    
-    private func syncWithCloud() {
-        Task {
-            do {
-                try await cloudKitManager.syncChores(chores)
-                try await cloudKitManager.syncCategories(categories)
-                try await cloudKitManager.syncStatistics(statistics)
-                try await cloudKitManager.syncAchievements(achievements)
-            } catch {
-                syncErrorMessage = error.localizedDescription
-                showingSyncError = true
-            }
-        }
-    }
-    
-    private func loadFromCloud() {
-        Task {
-            do {
-                let cloudChores = try await cloudKitManager.fetchChores()
-                let cloudCategories = try await cloudKitManager.fetchCategories()
-                let cloudStatistics = try await cloudKitManager.fetchStatistics()
-                let cloudAchievements = try await cloudKitManager.fetchAchievements()
-                
-                await MainActor.run {
-                    chores = cloudChores
-                    categories = cloudCategories
-                    statistics = cloudStatistics
-                    achievements = cloudAchievements
+    var body: some View {
+        NavigationView {
+            List {
+                ForEach(chores.filter { !$0.isCompleted }) { chore in
+                    ChoreRow(chore: chore, category: categories.first(where: { $0.id == chore.categoryId }))
+                        .swipeActions(edge: .trailing) {
+                            Button(role: .destructive) {
+                                if settings.showDeleteConfirmation {
+                                    choreToDelete = chore
+                                    showingDeleteAlert = true
+                                } else {
+                                    deleteChore(chore)
+                                }
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                            
+                            Button {
+                                completeChore(chore)
+                            } label: {
+                                Label("Complete", systemImage: "checkmark")
+                            }
+                            .tint(.green)
+                        }
                 }
-            } catch {
-                syncErrorMessage = error.localizedDescription
-                showingSyncError = true
             }
-        }
-    }
-    
-    private func handleAutoBackup() {
-        if settings.autoBackupToiCloud {
-            syncWithCloud()
+            .navigationTitle("HTasks")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        showingSettingsSheet = true
+                    } label: {
+                        Image(systemName: "gear")
+                    }
+                }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        showingAddChore = true
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                }
+            }
+            .sheet(isPresented: $showingAddChore) {
+                AddChoreView(chores: $chores, categories: $categories, statistics: $statistics, notificationManager: notificationManager)
+            }
+            .sheet(isPresented: $showingSettingsSheet) {
+                SettingsView(settings: $settings, chores: $chores, categories: $categories, statistics: $statistics, achievements: $achievements)
+            }
+            .alert(settings.deleteConfirmationText, isPresented: $showingDeleteAlert) {
+                Button("Cancel", role: .cancel) { }
+                Button("Delete", role: .destructive) {
+                    if let chore = choreToDelete {
+                        deleteChore(chore)
+                    }
+                }
+            }
+            .alert("Sync Error", isPresented: $showingSyncError) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(syncError?.localizedDescription ?? "Unknown error occurred while syncing")
+            }
         }
     }
 }
