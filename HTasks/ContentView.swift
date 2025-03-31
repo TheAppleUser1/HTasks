@@ -391,6 +391,8 @@ class NotificationManager: ObservableObject {
     static let shared = NotificationManager()
     private let center = UNUserNotificationCenter.current()
     
+    private init() {} // Make init private for singleton
+    
     func requestAuthorization() {
         center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
             if granted {
@@ -545,7 +547,7 @@ struct HomeView: View {
     @State private var showingAddChore = false
     @State private var showingSettingsSheet = false
     @State private var settings = UserSettings()
-    @StateObject private var notificationManager = NotificationManager()
+    @StateObject private var notificationManager = NotificationManager.shared
     @State private var showingDeleteAlert = false
     @State private var choreToDelete: Chore?
     @State private var syncError: Error?
