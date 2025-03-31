@@ -26,16 +26,14 @@ struct Chore: Identifiable, Codable {
     var title: String
     var isCompleted: Bool
     var categoryId: UUID?
-    var dueDate: Date?
-    var creationDate: Date
+    var createdDate: Date
     
-    init(id: UUID = UUID(), title: String, isCompleted: Bool = false, categoryId: UUID? = nil, dueDate: Date? = nil) {
+    init(id: UUID = UUID(), title: String, isCompleted: Bool = false, categoryId: UUID? = nil, createdDate: Date = Date()) {
         self.id = id
         self.title = title
         self.isCompleted = isCompleted
         self.categoryId = categoryId
-        self.dueDate = dueDate
-        self.creationDate = Date()
+        self.createdDate = createdDate
     }
 }
 
@@ -122,16 +120,11 @@ class CloudKitManager: ObservableObject {
     static let shared = CloudKitManager()
     private let container: CKContainer
     private let database: CKDatabase
-    
-    @Published var isSyncing = false
-    @Published var lastSyncDate: Date?
     @Published var isAvailable = false
     
-    private init() {
-        container = CKContainer.default()
-        database = container.privateCloudDatabase
-        
-        // Check iCloud status
+    init() {
+        self.container = CKContainer.default()
+        self.database = container.privateCloudDatabase
         Task {
             await checkAccountStatus()
         }
@@ -141,22 +134,7 @@ class CloudKitManager: ObservableObject {
         do {
             let accountStatus = try await container.accountStatus()
             DispatchQueue.main.async {
-                switch accountStatus {
-                case .available:
-                    self.isAvailable = true
-                case .noAccount:
-                    print("No iCloud account")
-                    self.isAvailable = false
-                case .restricted:
-                    print("iCloud restricted")
-                    self.isAvailable = false
-                case .couldNotDetermine:
-                    print("Could not determine iCloud status")
-                    self.isAvailable = false
-                @unknown default:
-                    print("Unknown iCloud status")
-                    self.isAvailable = false
-                }
+                self.isAvailable = accountStatus == .available
             }
         } catch {
             print("Error checking iCloud status: \(error)")
@@ -166,207 +144,61 @@ class CloudKitManager: ObservableObject {
         }
     }
     
-    // Update sync functions to check availability first
     func syncChores(_ chores: [Chore]) async throws {
-        guard isAvailable else {
-            throw NSError(domain: "CloudKit", code: 5, userInfo: [NSLocalizedDescriptionKey: "iCloud is not available"])
-        }
-        
-        isSyncing = true
-        defer { isSyncing = false }
+        guard isAvailable else { throw CloudKitError.iCloudNotAvailable }
         
         // Delete existing records
         let query = CKQuery(recordType: "Chore", predicate: NSPredicate(value: true))
-        let result = try await database.records(matching: query)
-        let records = result.matchResults.compactMap { try? $0.1.get() }
-        
-        for record in records {
-            try await database.deleteRecord(withID: record.recordID)
+        let (matchResults, _) = try await database.records(matching: query)
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for (recordID, _) in matchResults {
+                group.addTask {
+                    try await self.database.deleteRecord(withID: recordID)
+                }
+            }
         }
         
         // Save new records
-        for chore in chores {
-            let record = CKRecord(recordType: "Chore")
-            record.setValue(chore.title, forKey: "title")
-            record.setValue(chore.isCompleted, forKey: "isCompleted")
-            record.setValue(chore.categoryId?.uuidString, forKey: "categoryId")
-            record.setValue(chore.dueDate, forKey: "dueDate")
-            record.setValue(chore.creationDate, forKey: "creationDate")
-            try await database.save(record)
-        }
-        
-        lastSyncDate = Date()
-    }
-    
-    // Update other sync functions similarly
-    func syncCategories(_ categories: [Category]) async throws {
-        guard isAvailable else {
-            throw NSError(domain: "CloudKit", code: 5, userInfo: [NSLocalizedDescriptionKey: "iCloud is not available"])
-        }
-        
-        let query = CKQuery(recordType: "Category", predicate: NSPredicate(value: true))
-        let (_, records, _) = try await database.records(matching: query)
-        for record in records {
-            try await database.deleteRecord(withID: record.recordID)
-        }
-        
-        for category in categories {
-            let record = CKRecord(recordType: "Category")
-            record.setValue(category.name, forKey: "name")
-            record.setValue(category.color, forKey: "color")
-            try await database.save(record)
-        }
-    }
-    
-    func syncStatistics(_ statistics: Statistics) async throws {
-        guard isAvailable else {
-            throw CloudKitError.iCloudNotAvailable
-        }
-        
-        let recordID = CKRecord.ID(recordType: "Statistics")
-        let record = CKRecord(recordID: recordID)
-        
-        record["totalCompleted"] = statistics.totalCompleted as CKRecordValue
-        record["currentStreak"] = statistics.currentStreak as CKRecordValue
-        record["bestStreak"] = statistics.bestStreak as CKRecordValue
-        if let lastCompletionDate = statistics.lastCompletionDate {
-            record["lastCompletionDate"] = lastCompletionDate as CKRecordValue
-        }
-        
-        // Convert UUID dictionary to string keys for CloudKit storage
-        let categoryCompletionsStringKeys = statistics.categoryCompletions.reduce(into: [:]) { result, entry in
-            result[entry.key.uuidString] = entry.value
-        }
-        record["categoryCompletions"] = categoryCompletionsStringKeys as CKRecordValue
-        
-        do {
-            _ = try await database.save(record)
-        } catch {
-            throw CloudKitError.saveFailed(error)
-        }
-    }
-    
-    func syncAchievements(_ achievements: [Achievement]) async throws {
-        guard isAvailable else {
-            throw NSError(domain: "CloudKit", code: 5, userInfo: [NSLocalizedDescriptionKey: "iCloud is not available"])
-        }
-        
-        let query = CKQuery(recordType: "Achievement", predicate: NSPredicate(value: true))
-        let (_, records, _) = try await database.records(matching: query)
-        for record in records {
-            try await database.deleteRecord(withID: record.recordID)
-        }
-        
-        for achievement in achievements {
-            let record = CKRecord(recordType: "Achievement")
-            record.setValue(achievement.title, forKey: "title")
-            record.setValue(achievement.description, forKey: "description")
-            record.setValue(achievement.icon, forKey: "icon")
-            record.setValue(achievement.requirement, forKey: "requirement")
-            record.setValue(achievement.type.rawValue, forKey: "type")
-            record.setValue(achievement.isUnlocked, forKey: "isUnlocked")
-            try await database.save(record)
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for chore in chores {
+                group.addTask {
+                    let record = CKRecord(recordType: "Chore")
+                    record.setValue(chore.id.uuidString, forKey: "id")
+                    record.setValue(chore.title, forKey: "title")
+                    record.setValue(chore.isCompleted, forKey: "isCompleted")
+                    record.setValue(chore.categoryId?.uuidString, forKey: "categoryId")
+                    record.setValue(chore.createdDate, forKey: "createdDate")
+                    try await self.database.save(record)
+                }
+            }
         }
     }
     
     func fetchChores() async throws -> [Chore] {
+        guard isAvailable else { throw CloudKitError.iCloudNotAvailable }
+        
         let query = CKQuery(recordType: "Chore", predicate: NSPredicate(value: true))
-        let result = try await database.records(matching: query)
-        let records = result.matchResults.compactMap { try? $0.1.get() }
+        let (matchResults, _) = try await database.records(matching: query)
         
-        return records.compactMap { record in
-            guard let title = record.value(forKey: "title") as? String else { return nil }
-            let isCompleted = record.value(forKey: "isCompleted") as? Bool ?? false
-            let categoryIdString = record.value(forKey: "categoryId") as? String
-            let categoryId = categoryIdString.flatMap { UUID(uuidString: $0) }
-            let dueDate = record.value(forKey: "dueDate") as? Date
-            let creationDate = record.value(forKey: "creationDate") as? Date ?? Date()
-            
-            return Chore(
-                id: UUID(uuidString: record.recordID.recordName) ?? UUID(),
-                title: title,
-                isCompleted: isCompleted,
-                categoryId: categoryId,
-                dueDate: dueDate
-            )
-        }
-    }
-    
-    func fetchCategories() async throws -> [Category] {
-        let query = CKQuery(recordType: "Category", predicate: NSPredicate(value: true))
-        let result = try await database.records(matching: query)
-        let records = result.matchResults.compactMap { try? $0.1.get() }
-        
-        return records.compactMap { record in
-            guard let name = record.value(forKey: "name") as? String,
-                  let color = record.value(forKey: "color") as? String else { return nil }
-            
-            return Category(
-                id: UUID(uuidString: record.recordID.recordName) ?? UUID(),
-                name: name,
-                color: color
-            )
-        }
-    }
-    
-    func fetchStatistics() async throws -> Statistics {
-        guard isAvailable else {
-            throw CloudKitError.iCloudNotAvailable
-        }
-        
-        let query = CKQuery(recordType: "Statistics", predicate: NSPredicate(value: true))
-        
-        do {
-            let (results, _) = try await database.records(matching: query)
-            if let record = results.first?.1.record {
-                var statistics = Statistics()
-                
-                statistics.totalCompleted = record["totalCompleted"] as? Int ?? 0
-                statistics.currentStreak = record["currentStreak"] as? Int ?? 0
-                statistics.bestStreak = record["bestStreak"] as? Int ?? 0
-                statistics.lastCompletionDate = record["lastCompletionDate"] as? Date
-                
-                // Convert string keys back to UUID for categoryCompletions
-                if let stringKeyCompletions = record["categoryCompletions"] as? [String: Int] {
-                    statistics.categoryCompletions = stringKeyCompletions.reduce(into: [:]) { result, entry in
-                        if let uuid = UUID(uuidString: entry.key) {
-                            result[uuid] = entry.value
-                        }
-                    }
-                }
-                
-                return statistics
-            }
-            return Statistics()
-        } catch {
-            throw CloudKitError.fetchFailed(error)
-        }
-    }
-    
-    func fetchAchievements() async throws -> [Achievement] {
-        let query = CKQuery(recordType: "Achievement", predicate: NSPredicate(value: true))
-        let result = try await database.records(matching: query)
-        let records = result.matchResults.compactMap { try? $0.1.get() }
-        
-        return records.compactMap { record in
-            guard let title = record.value(forKey: "title") as? String,
-                  let description = record.value(forKey: "description") as? String,
-                  let icon = record.value(forKey: "icon") as? String,
-                  let requirement = record.value(forKey: "requirement") as? Int,
-                  let typeString = record.value(forKey: "type") as? String,
-                  let type = Achievement.AchievementType(rawValue: typeString),
-                  let isUnlocked = record.value(forKey: "isUnlocked") as? Bool else {
+        return try matchResults.compactMap { _, result in
+            let record = try result.get()
+            guard let idString = record.value(forKey: "id") as? String,
+                  let id = UUID(uuidString: idString),
+                  let title = record.value(forKey: "title") as? String,
+                  let isCompleted = record.value(forKey: "isCompleted") as? Bool,
+                  let createdDate = record.value(forKey: "createdDate") as? Date else {
                 return nil
             }
             
-            return Achievement(
-                id: UUID(uuidString: record.recordID.recordName) ?? UUID(),
+            let categoryIdString = record.value(forKey: "categoryId") as? String
+            let categoryId = categoryIdString.flatMap { UUID(uuidString: $0) }
+            
+            return Chore(
+                id: id,
                 title: title,
-                description: description,
-                icon: icon,
-                requirement: requirement,
-                type: type,
-                isUnlocked: isUnlocked
+                isCompleted: isCompleted,
+                categoryId: categoryId,
+                createdDate: createdDate
             )
         }
     }
@@ -425,7 +257,7 @@ class AIMotivationManager: ObservableObject {
     ]
     
     func generateMessage(for chore: Chore, statistics: Statistics) -> String {
-        let timeSinceCreation = Calendar.current.dateComponents([.hour], from: chore.creationDate, to: Date()).hour ?? 0
+        let timeSinceCreation = Calendar.current.dateComponents([.hour], from: chore.createdDate, to: Date()).hour ?? 0
         let category = getCategoryName(for: chore.categoryId)
         
         // Time-based messages
@@ -465,7 +297,7 @@ class NotificationManager: ObservableObject {
         content.sound = .default
         
         // Schedule for 2 hours from now if chore is new, or 24 hours if it's been pending
-        let timeSinceCreation = Calendar.current.dateComponents([.hour], from: chore.creationDate, to: Date()).hour ?? 0
+        let timeSinceCreation = Calendar.current.dateComponents([.hour], from: chore.createdDate, to: Date()).hour ?? 0
         let delay: TimeInterval = timeSinceCreation < 24 ? 7200 : 86400 // 2 hours or 24 hours
         
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: delay, repeats: false)
@@ -486,42 +318,22 @@ class NotificationManager: ObservableObject {
 struct ContentView: View {
     @State private var isWelcomeActive = true
     @State private var chores: [Chore] = []
-    @Environment(\.colorScheme) var colorScheme
+    @State private var categories: [Category] = []
+    @State private var statistics = Statistics()
+    @State private var achievements: [Achievement] = []
     
-    // Load saved chores when the view appears
     var body: some View {
-        NavigationView {
-            if isWelcomeActive {
-                WelcomeView(chores: $chores, isWelcomeActive: $isWelcomeActive)
+        Group {
+            if isWelcomeActive && chores.isEmpty {
+                WelcomeView(isWelcomeActive: $isWelcomeActive, chores: $chores)
             } else {
-                HomeView(chores: $chores, categories: $chores, statistics: $chores, achievements: $chores)
+                HomeView(
+                    chores: $chores,
+                    categories: $categories,
+                    statistics: $statistics,
+                    achievements: $achievements
+                )
             }
-        }
-        .navigationViewStyle(StackNavigationViewStyle())
-        .onAppear {
-            loadChores()
-            
-            // Check if we should skip welcome screen
-            let hasSeenWelcome = UserDefaults.standard.bool(forKey: "hasSeenWelcome")
-            if hasSeenWelcome && !chores.isEmpty {
-                isWelcomeActive = false
-            }
-        }
-    }
-    
-    private func loadChores() {
-        if let savedChores = UserDefaults.standard.data(forKey: "savedChores") {
-            do {
-                let decodedChores = try JSONDecoder().decode([Chore].self, from: savedChores)
-                self.chores = decodedChores
-                
-                // Log for debugging
-                print("Loaded \(decodedChores.count) chores from UserDefaults")
-            } catch {
-                print("Failed to decode chores: \(error.localizedDescription)")
-            }
-        } else {
-            print("No saved chores found in UserDefaults")
         }
     }
 }
@@ -603,12 +415,11 @@ struct HomeView: View {
     @Binding var categories: [Category]
     @Binding var statistics: Statistics
     @Binding var achievements: [Achievement]
-    @StateObject private var cloudKit = CloudKitManager()
+    @StateObject private var cloudKit = CloudKitManager.shared
     @State private var showingAddChore = false
     @State private var showingSettingsSheet = false
     @AppStorage("settings") private var settings = UserSettings()
     @StateObject private var notificationManager = NotificationManager()
-    @StateObject private var motivationManager = AIMotivationManager()
     @State private var showingDeleteAlert = false
     @State private var choreToDelete: Chore?
     @State private var syncError: Error?
@@ -619,7 +430,6 @@ struct HomeView: View {
             UserDefaults.standard.set(encoded, forKey: "chores")
             UserDefaults.standard.synchronize()
             
-            // Sync to iCloud if available
             if cloudKit.isAvailable {
                 Task {
                     do {
@@ -640,7 +450,6 @@ struct HomeView: View {
             UserDefaults.standard.set(encoded, forKey: "statistics")
             UserDefaults.standard.synchronize()
             
-            // Sync to iCloud if available
             if cloudKit.isAvailable {
                 Task {
                     do {
@@ -659,18 +468,13 @@ struct HomeView: View {
     private func completeChore(_ chore: Chore) {
         if let index = chores.firstIndex(where: { $0.id == chore.id }) {
             chores[index].isCompleted = true
-            chores[index].completedDate = Date()
             statistics.updateForChoreCompletion(chore: chores[index])
             
             saveChores()
             saveStatistics()
-            checkAchievements()
             
             // Cancel notification for completed chore
             notificationManager.cancelNotification(for: chore.id)
-            
-            // Show motivation message
-            motivationManager.showMotivationMessage()
         }
     }
     
@@ -729,10 +533,21 @@ struct HomeView: View {
                 }
             }
             .sheet(isPresented: $showingAddChore) {
-                AddChoreView(chores: $chores, categories: $categories, statistics: $statistics, notificationManager: notificationManager)
+                AddChoreView(
+                    chores: $chores,
+                    categories: $categories,
+                    statistics: $statistics,
+                    notificationManager: notificationManager
+                )
             }
             .sheet(isPresented: $showingSettingsSheet) {
-                SettingsView(settings: $settings, chores: $chores, categories: $categories, statistics: $statistics, achievements: $achievements)
+                SettingsView(
+                    settings: $settings,
+                    chores: $chores,
+                    categories: $categories,
+                    statistics: $statistics,
+                    achievements: $achievements
+                )
             }
             .alert(settings.deleteConfirmationText, isPresented: $showingDeleteAlert) {
                 Button("Cancel", role: .cancel) { }
@@ -909,7 +724,7 @@ struct AddChoreView: View {
                         title: newChoreTitle,
                         isCompleted: false,
                         categoryId: selectedCategoryId,
-                        dueDate: showingDatePicker ? dueDate : nil
+                        createdDate: showingDatePicker ? dueDate ?? Date() : Date()
                     )
                     chores.append(newChore)
                     saveChores()
@@ -1096,6 +911,31 @@ struct SettingsView: View {
                 showingBackupError = true
             }
         }
+    }
+}
+
+struct ChoreRow: View {
+    let chore: Chore
+    let category: Category?
+    
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading) {
+                Text(chore.title)
+                    .font(.headline)
+                if let category = category {
+                    Text(category.name)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            Spacer()
+            if chore.isCompleted {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundColor(.green)
+            }
+        }
+        .padding(.vertical, 8)
     }
 }
 
