@@ -335,7 +335,12 @@ struct ContentView: View {
     var body: some View {
         Group {
             if isWelcomeActive && chores.isEmpty {
-                WelcomeView(isWelcomeActive: $isWelcomeActive, chores: $chores)
+                WelcomeView(
+                    isWelcomeActive: $isWelcomeActive,
+                    chores: $chores,
+                    categories: $categories,
+                    statistics: $statistics
+                )
             } else {
                 HomeView(
                     chores: $chores,
@@ -351,6 +356,8 @@ struct ContentView: View {
 struct WelcomeView: View {
     @Binding var isWelcomeActive: Bool
     @Binding var chores: [Chore]
+    @Binding var categories: [Category]
+    @Binding var statistics: Statistics
     @State private var newChoreName = ""
     @State private var showingAddChore = false
     
@@ -415,7 +422,12 @@ struct WelcomeView: View {
         }
         .padding()
         .sheet(isPresented: $showingAddChore) {
-            AddChoreView(chores: $chores, categories: $categories, statistics: $statistics, notificationManager: NotificationManager())
+            AddChoreView(
+                chores: $chores,
+                categories: $categories,
+                statistics: $statistics,
+                notificationManager: NotificationManager()
+            )
         }
     }
 }
@@ -543,7 +555,12 @@ struct HomeView: View {
                 }
             }
             .sheet(isPresented: $showingAddChore) {
-                AddChoreView(chores: $chores, categories: $categories, statistics: $statistics, notificationManager: NotificationManager())
+                AddChoreView(
+                    chores: $chores,
+                    categories: $categories,
+                    statistics: $statistics,
+                    notificationManager: NotificationManager()
+                )
             }
             .sheet(isPresented: $showingSettingsSheet) {
                 SettingsView(
