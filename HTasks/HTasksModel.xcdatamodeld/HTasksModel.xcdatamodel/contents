@@ -30,7 +30,7 @@
     </entity>
     <entity name="AchievementEntity" representedClassName="AchievementEntity" syncable="YES" codeGenerationType="class">
         <attribute name="achievedDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
-        <attribute name="description" attributeType="String"/>
+        <attribute name="achievementDescription" attributeType="String"/>
         <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
         <attribute name="isAchieved" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
         <attribute name="name" attributeType="String"/>

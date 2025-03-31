@@ -1,7 +1,8 @@
 import CoreData
 import SwiftUI
+import Combine
 
-class CoreDataManager {
+class CoreDataManager: ObservableObject {
     static let shared = CoreDataManager()
     
     private let container: NSPersistentContainer
@@ -275,7 +276,7 @@ class CoreDataManager {
         let achievement = AchievementEntity(context: viewContext)
         achievement.id = UUID()
         achievement.name = name
-        achievement.description = description
+        achievement.achievementDescription = description
         achievement.type = type
         achievement.threshold = threshold
         achievement.progress = 0

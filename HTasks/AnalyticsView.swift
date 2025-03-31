@@ -596,7 +596,7 @@ struct AchievementCard: View {
                 }
             }
             
-            Text(achievement.description ?? "")
+            Text(achievement.achievementDescription ?? "")
                 .font(.subheadline)
                 .foregroundColor(colorScheme == .dark ? .white.opacity(0.8) : .black.opacity(0.8))
             

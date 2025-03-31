@@ -432,7 +432,7 @@ struct HomeView: View {
                                 Text("Category")
                                 Spacer()
                                 NavigationLink {
-                                    CategoryPickerView(selectedCategoryId: $selectedCategoryId, coreDataManager: CoreDataManager.shared)
+                                    CategoryPickerView(selectedCategoryId: $selectedCategoryId)
                                 } label: {
                                     HStack {
                                         if let selectedCategory = getSelectedCategory() {
@@ -729,7 +729,7 @@ struct CategoryPickerView: View {
     @Binding var selectedCategoryId: UUID?
     @Environment(\.dismiss) var dismiss
     @Environment(\.colorScheme) var colorScheme
-    let coreDataManager: CoreDataManager
+    @StateObject private var coreDataManager = CoreDataManager.shared
     @State private var categories: [CategoryEntity] = []
     
     var body: some View {
