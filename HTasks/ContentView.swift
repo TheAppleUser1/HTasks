@@ -121,6 +121,7 @@ class CloudKitManager: ObservableObject {
     private let container: CKContainer
     private let database: CKDatabase
     @Published var isAvailable = false
+    @Published var lastSyncDate: Date?
     
     init() {
         self.container = CKContainer.default()
@@ -171,6 +172,106 @@ class CloudKitManager: ObservableObject {
                     try await self.database.save(record)
                 }
             }
+        }
+        
+        DispatchQueue.main.async {
+            self.lastSyncDate = Date()
+        }
+    }
+    
+    func syncCategories(_ categories: [Category]) async throws {
+        guard isAvailable else { throw CloudKitError.iCloudNotAvailable }
+        
+        let query = CKQuery(recordType: "Category", predicate: NSPredicate(value: true))
+        let (matchResults, _) = try await database.records(matching: query)
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for (recordID, _) in matchResults {
+                group.addTask {
+                    try await self.database.deleteRecord(withID: recordID)
+                }
+            }
+        }
+        
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for category in categories {
+                group.addTask {
+                    let record = CKRecord(recordType: "Category")
+                    record.setValue(category.id.uuidString, forKey: "id")
+                    record.setValue(category.name, forKey: "name")
+                    record.setValue(category.color, forKey: "color")
+                    try await self.database.save(record)
+                }
+            }
+        }
+        
+        DispatchQueue.main.async {
+            self.lastSyncDate = Date()
+        }
+    }
+    
+    func syncStatistics(_ statistics: Statistics) async throws {
+        guard isAvailable else { throw CloudKitError.iCloudNotAvailable }
+        
+        let query = CKQuery(recordType: "Statistics", predicate: NSPredicate(value: true))
+        let (matchResults, _) = try await database.records(matching: query)
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for (recordID, _) in matchResults {
+                group.addTask {
+                    try await self.database.deleteRecord(withID: recordID)
+                }
+            }
+        }
+        
+        let record = CKRecord(recordType: "Statistics")
+        record.setValue(statistics.totalCompleted, forKey: "totalCompleted")
+        record.setValue(statistics.currentStreak, forKey: "currentStreak")
+        record.setValue(statistics.bestStreak, forKey: "bestStreak")
+        record.setValue(statistics.lastCompletionDate, forKey: "lastCompletionDate")
+        
+        // Convert UUID dictionary to string keys for CloudKit storage
+        let categoryCompletionsStringKeys = statistics.categoryCompletions.reduce(into: [:]) { result, entry in
+            result[entry.key.uuidString] = entry.value
+        }
+        record.setValue(categoryCompletionsStringKeys, forKey: "categoryCompletions")
+        
+        try await database.save(record)
+        
+        DispatchQueue.main.async {
+            self.lastSyncDate = Date()
+        }
+    }
+    
+    func syncAchievements(_ achievements: [Achievement]) async throws {
+        guard isAvailable else { throw CloudKitError.iCloudNotAvailable }
+        
+        let query = CKQuery(recordType: "Achievement", predicate: NSPredicate(value: true))
+        let (matchResults, _) = try await database.records(matching: query)
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for (recordID, _) in matchResults {
+                group.addTask {
+                    try await self.database.deleteRecord(withID: recordID)
+                }
+            }
+        }
+        
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for achievement in achievements {
+                group.addTask {
+                    let record = CKRecord(recordType: "Achievement")
+                    record.setValue(achievement.id.uuidString, forKey: "id")
+                    record.setValue(achievement.title, forKey: "title")
+                    record.setValue(achievement.description, forKey: "description")
+                    record.setValue(achievement.icon, forKey: "icon")
+                    record.setValue(achievement.requirement, forKey: "requirement")
+                    record.setValue(achievement.type.rawValue, forKey: "type")
+                    record.setValue(achievement.isUnlocked, forKey: "isUnlocked")
+                    try await self.database.save(record)
+                }
+            }
+        }
+        
+        DispatchQueue.main.async {
+            self.lastSyncDate = Date()
         }
     }
     
@@ -440,7 +541,7 @@ struct HomeView: View {
     @StateObject private var cloudKit = CloudKitManager.shared
     @State private var showingAddChore = false
     @State private var showingSettingsSheet = false
-    @AppStorage("settings") private var settings = UserSettings()
+    @State private var settings = UserSettings()
     @StateObject private var notificationManager = NotificationManager()
     @State private var showingDeleteAlert = false
     @State private var choreToDelete: Chore?
@@ -476,6 +577,26 @@ struct HomeView: View {
                 Task {
                     do {
                         try await cloudKit.syncStatistics(statistics)
+                    } catch {
+                        DispatchQueue.main.async {
+                            syncError = error
+                            showingSyncError = true
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    private func saveCategories() {
+        if let encoded = try? JSONEncoder().encode(categories) {
+            UserDefaults.standard.set(encoded, forKey: "categories")
+            UserDefaults.standard.synchronize()
+            
+            if cloudKit.isAvailable {
+                Task {
+                    do {
+                        try await cloudKit.syncCategories(categories)
                     } catch {
                         DispatchQueue.main.async {
                             syncError = error
@@ -593,6 +714,9 @@ struct CategoryManagementView: View {
     @State private var newCategoryName = ""
     @State private var selectedColor = "blue"
     @Environment(\.dismiss) var dismiss
+    @StateObject private var cloudKit = CloudKitManager.shared
+    @State private var syncError: Error?
+    @State private var showingSyncError = false
     
     let colors = ["blue", "red", "green", "orange", "purple", "pink"]
     
@@ -643,6 +767,11 @@ struct CategoryManagementView: View {
             }
             .navigationTitle("Categories")
             .navigationBarItems(trailing: Button("Done") { dismiss() })
+            .alert("Sync Error", isPresented: $showingSyncError) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(syncError?.localizedDescription ?? "Unknown error occurred while syncing")
+            }
         }
     }
     
@@ -659,13 +788,22 @@ struct CategoryManagementView: View {
     }
     
     private func saveCategories() {
-        do {
-            let encoded = try JSONEncoder().encode(categories)
-            UserDefaults.standard.set(encoded, forKey: "savedCategories")
+        if let encoded = try? JSONEncoder().encode(categories) {
+            UserDefaults.standard.set(encoded, forKey: "categories")
             UserDefaults.standard.synchronize()
-            handleAutoBackup()
-        } catch {
-            print("Failed to save categories: \(error.localizedDescription)")
+            
+            if cloudKit.isAvailable {
+                Task {
+                    do {
+                        try await cloudKit.syncCategories(categories)
+                    } catch {
+                        DispatchQueue.main.async {
+                            syncError = error
+                            showingSyncError = true
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -851,7 +989,7 @@ struct SettingsView: View {
     @State private var showingBackupError = false
     @State private var backupErrorMessage = ""
     @State private var isBackingUp = false
-    @StateObject private var cloudKitManager = CloudKitManager.shared
+    @StateObject private var cloudKit = CloudKitManager.shared
     
     var body: some View {
         NavigationView {
@@ -861,8 +999,13 @@ struct SettingsView: View {
                     
                     if settings.showDeleteConfirmation {
                         TextField("Delete confirmation message", text: $settings.deleteConfirmationText)
-                            .foregroundColor(.gray)
                     }
+                }
+                .onChange(of: settings.showDeleteConfirmation) { _, _ in
+                    settings.save()
+                }
+                .onChange(of: settings.deleteConfirmationText) { _, _ in
+                    settings.save()
                 }
                 
                 Section(header: Text("iCloud Backup")) {
@@ -882,17 +1025,24 @@ struct SettingsView: View {
                             }
                         }
                     }
-                    .disabled(isBackingUp)
+                    .disabled(isBackingUp || !cloudKit.isAvailable)
                     
                     Toggle("Automatic iCloud Backup", isOn: $settings.autoBackupToiCloud)
-                        .onChange(of: settings.autoBackupToiCloud) { oldValue, newValue in
+                        .onChange(of: settings.autoBackupToiCloud) { _, _ in
                             settings.save()
                         }
                     
-                    if let lastSync = cloudKitManager.lastSyncDate {
+                    if let lastSync = cloudKit.lastSyncDate {
                         Text("Last backup: \(lastSync.formatted(.relative(presentation: .named)))")
                             .font(.caption)
                             .foregroundColor(.gray)
+                    }
+                }
+                
+                if !cloudKit.isAvailable {
+                    Section {
+                        Text("iCloud is not available. Please check your iCloud settings.")
+                            .foregroundColor(.red)
                     }
                 }
             }
@@ -912,20 +1062,31 @@ struct SettingsView: View {
     }
     
     private func performBackup() async {
-        isBackingUp = true
-        defer { isBackingUp = false }
+        guard cloudKit.isAvailable else {
+            await MainActor.run {
+                backupErrorMessage = "iCloud is not available"
+                showingBackupError = true
+            }
+            return
+        }
+        
+        await MainActor.run {
+            isBackingUp = true
+        }
         
         do {
-            try await cloudKitManager.syncChores(chores)
-            try await cloudKitManager.syncCategories(categories)
-            try await cloudKitManager.syncStatistics(statistics)
-            try await cloudKitManager.syncAchievements(achievements)
+            try await cloudKit.syncChores(chores)
+            try await cloudKit.syncCategories(categories)
+            try await cloudKit.syncStatistics(statistics)
+            try await cloudKit.syncAchievements(achievements)
             
             await MainActor.run {
+                isBackingUp = false
                 showingBackupSuccess = true
             }
         } catch {
             await MainActor.run {
+                isBackingUp = false
                 backupErrorMessage = error.localizedDescription
                 showingBackupError = true
             }
