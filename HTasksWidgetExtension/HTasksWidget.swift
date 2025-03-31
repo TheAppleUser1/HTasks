@@ -3,11 +3,11 @@ import SwiftUI
 
 struct Provider: TimelineProvider {
     func placeholder(in context: Context) -> TimeEmojiEntry {
-        TimeEmojiEntry(date: Date(), emoji: "😊")
+        TimeEmojiEntry(date: Date(), emoji: "⏰")
     }
 
     func getSnapshot(in context: Context, completion: @escaping (TimeEmojiEntry) -> ()) {
-        let entry = TimeEmojiEntry(date: Date(), emoji: "😊")
+        let entry = TimeEmojiEntry(date: Date(), emoji: getRandomEmoji(for: Date()))
         completion(entry)
     }
 
@@ -15,24 +15,27 @@ struct Provider: TimelineProvider {
         var entries: [TimeEmojiEntry] = []
         let currentDate = Date()
         
-        // Create a timeline with entries every 5 minutes for the next hour
-        for minuteOffset in stride(from: 0, to: 60, by: 5) {
+        // First entry should be current date/time
+        let initialEntry = TimeEmojiEntry(date: currentDate, emoji: getRandomEmoji(for: currentDate))
+        entries.append(initialEntry)
+        
+        // Create additional entries every 5 minutes for the next hour
+        for minuteOffset in stride(from: 5, to: 65, by: 5) {
             let entryDate = Calendar.current.date(byAdding: .minute, value: minuteOffset, to: currentDate)!
-            
-            // Different emojis for different times
             let emoji = getRandomEmoji(for: entryDate)
             let entry = TimeEmojiEntry(date: entryDate, emoji: emoji)
             entries.append(entry)
         }
 
-        let timeline = Timeline(entries: entries, policy: .atEnd)
+        let timeline = Timeline(entries: entries, policy: .after(Calendar.current.date(byAdding: .hour, value: 1, to: currentDate)!))
         completion(timeline)
     }
     
     func getRandomEmoji(for date: Date) -> String {
         let emojis = ["😊", "🥳", "🚀", "🔥", "✨", "💫", "🌈", "🦄", "🎉", "❤️", "🌟", "💪"]
         let minute = Calendar.current.component(.minute, from: date)
-        let index = minute % emojis.count
+        let second = Calendar.current.component(.second, from: date)
+        let index = (minute + second) % emojis.count
         return emojis[index]
     }
 }
@@ -70,26 +73,28 @@ struct SmallTimeEmojiView: View {
             // Background gradient
             LinearGradient(
                 gradient: Gradient(colors: colorScheme == .dark ? 
-                                  [Color.black, Color.purple.opacity(0.3)] : 
-                                  [Color.white, Color.purple.opacity(0.2)]),
-                startPoint: .top,
-                endPoint: .bottom
+                                  [Color.black, Color.blue.opacity(0.5)] : 
+                                  [Color.white, Color.blue.opacity(0.3)]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
             )
             
             VStack(spacing: 10) {
                 // Emoji
                 Text(entry.emoji)
                     .font(.system(size: 60))
+                    .shadow(color: .black.opacity(0.2), radius: 1, x: 0, y: 1)
                 
                 // Time
                 Text(entry.date, style: .time)
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .font(.system(size: 32, weight: .bold, design: .rounded))
                     .foregroundColor(colorScheme == .dark ? .white : .black)
+                    .shadow(color: colorScheme == .dark ? .black.opacity(0.3) : .white.opacity(0.5), radius: 1, x: 0, y: 1)
                 
                 // Date
                 Text(entry.date, style: .date)
                     .font(.caption)
-                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
+                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.9) : .black.opacity(0.9))
             }
             .padding()
         }
@@ -105,31 +110,33 @@ struct MediumTimeEmojiView: View {
             // Background gradient
             LinearGradient(
                 gradient: Gradient(colors: colorScheme == .dark ? 
-                                  [Color.black, Color.purple.opacity(0.3)] : 
-                                  [Color.white, Color.purple.opacity(0.2)]),
-                startPoint: .top,
-                endPoint: .bottom
+                                  [Color.black, Color.blue.opacity(0.5)] : 
+                                  [Color.white, Color.blue.opacity(0.3)]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
             )
             
             HStack(spacing: 30) {
                 // Emoji
                 Text(entry.emoji)
                     .font(.system(size: 80))
+                    .shadow(color: .black.opacity(0.2), radius: 1, x: 0, y: 1)
                 
                 VStack(alignment: .leading, spacing: 8) {
                     // Time
                     Text(entry.date, style: .time)
                         .font(.system(size: 38, weight: .bold, design: .rounded))
                         .foregroundColor(colorScheme == .dark ? .white : .black)
+                        .shadow(color: colorScheme == .dark ? .black.opacity(0.3) : .white.opacity(0.5), radius: 1, x: 0, y: 1)
                     
                     // Date
                     Text(entry.date, style: .date)
                         .font(.headline)
-                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
+                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.9) : .black.opacity(0.9))
                     
-                    Text("Updated \(entry.date, style: .relative) ago")
+                    Text("Updated just now")
                         .font(.caption)
-                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.5) : .black.opacity(0.5))
+                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
                 }
                 
                 Spacer()
@@ -150,10 +157,10 @@ struct LargeTimeEmojiView: View {
             // Background gradient
             LinearGradient(
                 gradient: Gradient(colors: colorScheme == .dark ? 
-                                  [Color.black, Color.purple.opacity(0.3)] : 
-                                  [Color.white, Color.purple.opacity(0.2)]),
-                startPoint: .top,
-                endPoint: .bottom
+                                  [Color.black, Color.blue.opacity(0.5)] : 
+                                  [Color.white, Color.blue.opacity(0.3)]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
             )
             
             VStack(spacing: 25) {
@@ -161,20 +168,23 @@ struct LargeTimeEmojiView: View {
                 Text("Time & Emoji")
                     .font(.system(size: 28, weight: .bold, design: .rounded))
                     .foregroundColor(colorScheme == .dark ? .white : .black)
+                    .shadow(color: colorScheme == .dark ? .black.opacity(0.3) : .white.opacity(0.5), radius: 1, x: 0, y: 1)
                 
                 // Main emoji
                 Text(entry.emoji)
                     .font(.system(size: 120))
+                    .shadow(color: .black.opacity(0.2), radius: 2, x: 0, y: 2)
                 
                 // Current time
                 VStack {
                     Text(entry.date, style: .time)
                         .font(.system(size: 46, weight: .bold, design: .rounded))
                         .foregroundColor(colorScheme == .dark ? .white : .black)
+                        .shadow(color: colorScheme == .dark ? .black.opacity(0.3) : .white.opacity(0.5), radius: 1, x: 0, y: 1)
                     
                     Text(entry.date, style: .date)
                         .font(.title3)
-                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
+                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.9) : .black.opacity(0.9))
                 }
                 
                 // Additional emojis in a row
@@ -182,6 +192,7 @@ struct LargeTimeEmojiView: View {
                     ForEach(additionalEmojis.prefix(5), id: \.self) { emoji in
                         Text(emoji)
                             .font(.system(size: 30))
+                            .shadow(color: .black.opacity(0.1), radius: 1, x: 0, y: 1)
                     }
                 }
                 .padding(.top, 10)
@@ -204,6 +215,7 @@ struct TimeEmojiWidget: Widget {
         .configurationDisplayName("Time & Emoji")
         .description("Display the current time with your favorite emoji.")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+        .contentMarginsDisabled()
     }
 }
 
