@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import WidgetKit
 
 struct Category: Identifiable, Codable {
     var id: UUID
@@ -231,9 +232,40 @@ struct WelcomeView: View {
     
     private func saveChores() {
         do {
+            // Save the full chore data for the app
             let encoded = try JSONEncoder().encode(chores)
             UserDefaults.standard.set(encoded, forKey: "savedChores")
+            
+            // Save a simplified version for the widget
+            let widgetChores = chores.map { chore -> [String: Any] in
+                var choreDict: [String: Any] = [
+                    "id": chore.id.uuidString,
+                    "title": chore.title,
+                    "isCompleted": chore.isCompleted
+                ]
+                
+                if let categoryId = chore.categoryId,
+                   let category = getCategory(for: categoryId) {
+                    choreDict["categoryName"] = category.name
+                    choreDict["categoryColor"] = category.color
+                }
+                
+                if let dueDate = chore.dueDate {
+                    choreDict["dueDate"] = dueDate
+                }
+                
+                return choreDict
+            }
+            
+            UserDefaults.standard.set(try JSONSerialization.data(withJSONObject: widgetChores), 
+                                     forKey: "widgetChores")
             UserDefaults.standard.synchronize()
+            
+            // Update widgets to refresh with new data
+            if #available(iOS 14.0, *) {
+                WidgetCenter.shared.reloadAllTimelines()
+            }
+            
             print("Successfully saved \(chores.count) chores from WelcomeView")
         } catch {
             print("Failed to encode chores: \(error.localizedDescription)")
@@ -671,9 +703,40 @@ struct HomeView: View {
     
     private func saveChores() {
         do {
+            // Save the full chore data for the app
             let encoded = try JSONEncoder().encode(chores)
             UserDefaults.standard.set(encoded, forKey: "savedChores")
+            
+            // Save a simplified version for the widget
+            let widgetChores = chores.map { chore -> [String: Any] in
+                var choreDict: [String: Any] = [
+                    "id": chore.id.uuidString,
+                    "title": chore.title,
+                    "isCompleted": chore.isCompleted
+                ]
+                
+                if let categoryId = chore.categoryId,
+                   let category = getCategory(for: categoryId) {
+                    choreDict["categoryName"] = category.name
+                    choreDict["categoryColor"] = category.color
+                }
+                
+                if let dueDate = chore.dueDate {
+                    choreDict["dueDate"] = dueDate
+                }
+                
+                return choreDict
+            }
+            
+            UserDefaults.standard.set(try JSONSerialization.data(withJSONObject: widgetChores), 
+                                     forKey: "widgetChores")
             UserDefaults.standard.synchronize()
+            
+            // Update widgets to refresh with new data
+            if #available(iOS 14.0, *) {
+                WidgetCenter.shared.reloadAllTimelines()
+            }
+            
             print("Successfully saved \(chores.count) chores from HomeView")
         } catch {
             print("Failed to encode chores: \(error.localizedDescription)")
