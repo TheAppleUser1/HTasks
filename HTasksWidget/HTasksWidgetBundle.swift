@@ -12,7 +12,5 @@ import SwiftUI
 struct HTasksWidgetBundle: WidgetBundle {
     var body: some Widget {
         HTasksWidget()
-        HTasksWidgetControl()
-        HTasksWidgetLiveActivity()
     }
 }
