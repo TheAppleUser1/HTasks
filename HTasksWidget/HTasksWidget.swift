@@ -6,18 +6,44 @@ struct WidgetChore: Identifiable, Codable {
     var id: UUID
     var title: String
     var isCompleted: Bool
+    var categoryId: UUID?
     var categoryName: String?
     var categoryColor: String?
     var dueDate: Date?
+    var createdDate: Date
     
     static var mockChores: [WidgetChore] {
         [
-            WidgetChore(id: UUID(), title: "Clean kitchen", isCompleted: false, categoryName: "Kitchen", categoryColor: "blue", dueDate: Date().addingTimeInterval(3600)),
-            WidgetChore(id: UUID(), title: "Vacuum living room", isCompleted: false, categoryName: "Living Room", categoryColor: "orange", dueDate: Date().addingTimeInterval(7200)),
-            WidgetChore(id: UUID(), title: "Do laundry", isCompleted: false, categoryName: "Bedroom", categoryColor: "purple", dueDate: Date().addingTimeInterval(10800)),
-            WidgetChore(id: UUID(), title: "Take out trash", isCompleted: false, categoryName: "Other", categoryColor: "gray", dueDate: Date().addingTimeInterval(14400)),
-            WidgetChore(id: UUID(), title: "Mop bathroom floor", isCompleted: false, categoryName: "Bathroom", categoryColor: "green", dueDate: Date().addingTimeInterval(18000)),
-            WidgetChore(id: UUID(), title: "Clean windows", isCompleted: false, categoryName: "Kitchen", categoryColor: "blue", dueDate: Date().addingTimeInterval(21600))
+            WidgetChore(
+                id: UUID(),
+                title: "Clean kitchen",
+                isCompleted: false,
+                categoryId: UUID(),
+                categoryName: "Home",
+                categoryColor: "blue",
+                dueDate: Calendar.current.date(byAdding: .hour, value: 2, to: Date()),
+                createdDate: Date()
+            ),
+            WidgetChore(
+                id: UUID(),
+                title: "Buy groceries",
+                isCompleted: false,
+                categoryId: UUID(),
+                categoryName: "Shopping",
+                categoryColor: "green",
+                dueDate: nil,
+                createdDate: Date()
+            ),
+            WidgetChore(
+                id: UUID(),
+                title: "Review project",
+                isCompleted: false,
+                categoryId: nil,
+                categoryName: nil,
+                categoryColor: nil,
+                dueDate: Calendar.current.date(byAdding: .day, value: 1, to: Date()),
+                createdDate: Date()
+            )
         ]
     }
 }
@@ -28,84 +54,179 @@ struct ChoreProvider: TimelineProvider {
     }
 
     func getSnapshot(in context: Context, completion: @escaping (ChoreEntry) -> ()) {
-        let entry = ChoreEntry(date: Date(), chores: loadChores())
+        let chores = loadChores()
+        let entry = ChoreEntry(date: Date(), chores: chores)
         completion(entry)
     }
 
-    func getTimeline(in context: Context, completion: @escaping (Timeline<Entry>) -> ()) {
+    func getTimeline(in context: Context, completion: @escaping (Timeline<ChoreEntry>) -> ()) {
         var entries: [ChoreEntry] = []
+        
+        // Generate a timeline with entries at each hour
         let currentDate = Date()
-        let chores = loadChores()
-        
-        // First entry should be current date/time
-        let initialEntry = ChoreEntry(date: currentDate, chores: chores)
-        entries.append(initialEntry)
-        
-        // Create additional entries every 15 minutes for the next hour
-        for minuteOffset in stride(from: 15, to: 75, by: 15) {
-            let entryDate = Calendar.current.date(byAdding: .minute, value: minuteOffset, to: currentDate)!
+        for hourOffset in 0 ..< 24 {
+            let entryDate = Calendar.current.date(byAdding: .hour, value: hourOffset, to: currentDate)!
+            let chores = loadChores()
             let entry = ChoreEntry(date: entryDate, chores: chores)
             entries.append(entry)
         }
-
-        let timeline = Timeline(entries: entries, policy: .after(Calendar.current.date(byAdding: .hour, value: 1, to: currentDate)!))
+        
+        // Create the timeline with the entries and a refresh policy
+        let timeline = Timeline(entries: entries, policy: .atEnd)
         completion(timeline)
     }
     
-    private func loadChores() -> [WidgetChore] {
-        // Try to get chores from UserDefaults (shared with main app)
-        if let savedChores = UserDefaults.standard.data(forKey: "widgetChores") {
+    func loadChores() -> [WidgetChore] {
+        // Try to access the shared container
+        guard let userDefaults = UserDefaults(suiteName: "group.com.yourdomain.HTasks") else {
+            print("Could not access shared UserDefaults")
+            // Try standard UserDefaults as fallback
+            return loadChoresFromStandardDefaults()
+        }
+        
+        // First, try to get chores from the shared container
+        guard let data = userDefaults.data(forKey: "widgetChores") else {
+            print("No chores data found in shared UserDefaults")
+            return loadChoresFromStandardDefaults()
+        }
+        
+        // Try to decode as WidgetChore array first
+        do {
+            let decoder = JSONDecoder()
+            var chores = try decoder.decode([WidgetChore].self, from: data)
+            return processChores(chores)
+        } catch {
+            // If that fails, try to parse as dictionaries from serialization
             do {
-                if let choresDicts = try JSONSerialization.jsonObject(with: savedChores) as? [[String: Any]] {
+                if let choresDicts = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
                     var chores: [WidgetChore] = []
                     
                     for dict in choresDicts {
                         if let idString = dict["id"] as? String,
                            let id = UUID(uuidString: idString),
-                           let title = dict["title"] as? String,
-                           let isCompleted = dict["isCompleted"] as? Bool {
+                           let title = dict["title"] as? String {
                             
+                            // Get isCompleted, defaulting to false if missing
+                            let isCompleted = dict["isCompleted"] as? Bool ?? false
+                            
+                            // Get optional fields
+                            let categoryIdString = dict["categoryId"] as? String
+                            let categoryId = categoryIdString != nil ? UUID(uuidString: categoryIdString!) : nil
                             let categoryName = dict["categoryName"] as? String
                             let categoryColor = dict["categoryColor"] as? String
                             let dueDate = dict["dueDate"] as? Date
+                            let createdDate = dict["createdDate"] as? Date ?? Date()
                             
                             let chore = WidgetChore(
                                 id: id,
                                 title: title,
                                 isCompleted: isCompleted,
+                                categoryId: categoryId,
                                 categoryName: categoryName,
                                 categoryColor: categoryColor,
-                                dueDate: dueDate
+                                dueDate: dueDate,
+                                createdDate: createdDate
                             )
                             
                             chores.append(chore)
                         }
                     }
                     
-                    // Filter to only show incomplete chores
-                    return chores.filter { !$0.isCompleted }.prefix(6).map { $0 }
+                    return processChores(chores)
                 }
             } catch {
-                print("Failed to decode widget chores: \(error.localizedDescription)")
+                print("Failed to decode widget chores as dictionaries: \(error)")
             }
         }
         
-        // Try to load original chores as a fallback
-        if let savedChores = UserDefaults.standard.data(forKey: "savedChores") {
+        // If all else fails, return mock data
+        return WidgetChore.mockChores
+    }
+    
+    // Helper function to process chores (filter and sort)
+    func processChores(_ chores: [WidgetChore]) -> [WidgetChore] {
+        // Filter out completed chores
+        var filteredChores = chores.filter { !$0.isCompleted }
+        
+        // Sort by due date (if available), then by title
+        filteredChores.sort { (chore1, chore2) in
+            if let date1 = chore1.dueDate, let date2 = chore2.dueDate {
+                return date1 < date2
+            } else if chore1.dueDate != nil {
+                return true
+            } else if chore2.dueDate != nil {
+                return false
+            } else {
+                return chore1.title < chore2.title
+            }
+        }
+        
+        // Return no more than 10 chores for the widget
+        return Array(filteredChores.prefix(10))
+    }
+    
+    // Fallback to standard UserDefaults
+    func loadChoresFromStandardDefaults() -> [WidgetChore] {
+        guard let data = UserDefaults.standard.data(forKey: "widgetChores") else {
+            print("No chores data found in standard UserDefaults")
+            return WidgetChore.mockChores
+        }
+        
+        // Try to parse the data using the same methods as above
+        do {
+            let decoder = JSONDecoder()
+            var chores = try decoder.decode([WidgetChore].self, from: data)
+            return processChores(chores)
+        } catch {
+            // If that fails, try to parse as dictionaries
             do {
-                let chores = try JSONDecoder().decode([WidgetChore].self, from: savedChores)
-                return chores.filter { !$0.isCompleted }.prefix(6).map { $0 }
+                if let choresDicts = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+                    var chores: [WidgetChore] = []
+                    
+                    for dict in choresDicts {
+                        if let idString = dict["id"] as? String,
+                           let id = UUID(uuidString: idString),
+                           let title = dict["title"] as? String {
+                            
+                            // Get isCompleted, defaulting to false if missing
+                            let isCompleted = dict["isCompleted"] as? Bool ?? false
+                            
+                            // Get optional fields
+                            let categoryIdString = dict["categoryId"] as? String
+                            let categoryId = categoryIdString != nil ? UUID(uuidString: categoryIdString!) : nil
+                            let categoryName = dict["categoryName"] as? String
+                            let categoryColor = dict["categoryColor"] as? String
+                            let dueDate = dict["dueDate"] as? Date
+                            let createdDate = dict["createdDate"] as? Date ?? Date()
+                            
+                            let chore = WidgetChore(
+                                id: id,
+                                title: title,
+                                isCompleted: isCompleted,
+                                categoryId: categoryId,
+                                categoryName: categoryName,
+                                categoryColor: categoryColor,
+                                dueDate: dueDate,
+                                createdDate: createdDate
+                            )
+                            
+                            chores.append(chore)
+                        }
+                    }
+                    
+                    return processChores(chores)
+                }
             } catch {
-                print("Failed to decode chores: \(error.localizedDescription)")
+                print("Failed to decode widget chores as dictionaries from standard UserDefaults: \(error)")
             }
         }
         
-        // Return mock chores if unable to load from UserDefaults
         return WidgetChore.mockChores
     }
 }
 
-struct ChoreEntry: TimelineEntry {
+struct ChoreEntry: TimelineEntry, Identifiable {
+    var id: UUID = UUID()
     let date: Date
     let chores: [WidgetChore]
 }
@@ -121,6 +242,8 @@ struct ChoreWidgetEntryView : View {
             SmallChoreView(entry: entry)
         case .systemMedium:
             MediumChoreView(entry: entry)
+        case .systemLarge:
+            LargeChoreView(entry: entry)
         default:
             SmallChoreView(entry: entry)
         }
@@ -139,7 +262,7 @@ struct SmallChoreView: View {
             
             if let firstChore = entry.chores.first {
                 HStack {
-                    if let categoryColor = firstChore.categoryColor {
+                    if let categoryColor = firstChore.categoryColor, !categoryColor.isEmpty {
                         Circle()
                             .fill(Color(categoryColor))
                             .frame(width: 12, height: 12)
@@ -153,9 +276,16 @@ struct SmallChoreView: View {
                 }
                 
                 if let dueDate = firstChore.dueDate {
-                    Text(timeRemaining(for: dueDate))
-                        .font(.caption)
-                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .black.opacity(0.6))
+                    if #available(iOS 15.0, *) {
+                        Text(timeRemaining(for: dueDate))
+                            .font(.caption)
+                            .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .black.opacity(0.6))
+                    } else {
+                        // Fallback for older iOS versions
+                        Text(formatDate(dueDate))
+                            .font(.caption)
+                            .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .black.opacity(0.6))
+                    }
                 }
             } else {
                 Text("All done!")
@@ -170,9 +300,16 @@ struct SmallChoreView: View {
             
             Spacer()
             
-            Text(entry.date.formatted(date: .abbreviated, time: .shortened))
-                .font(.caption2)
-                .foregroundColor(colorScheme == .dark ? .white.opacity(0.5) : .black.opacity(0.5))
+            if #available(iOS 15.0, *) {
+                Text(entry.date.formatted(date: .abbreviated, time: .shortened))
+                    .font(.caption2)
+                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.5) : .black.opacity(0.5))
+            } else {
+                // Fallback for older iOS versions
+                Text(formatDate(entry.date))
+                    .font(.caption2)
+                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.5) : .black.opacity(0.5))
+            }
         }
         .padding()
         .containerBackground(for: .widget) {
@@ -195,12 +332,24 @@ struct SmallChoreView: View {
             if let hour = components.hour, let minute = components.minute {
                 if hour > 0 {
                     return "Due in \(hour)h \(minute)m"
-                } else {
+                } else if minute > 0 {
                     return "Due in \(minute)m"
+                } else {
+                    return "Due now"
                 }
             }
         }
-        return date.formatted(date: .abbreviated, time: .shortened)
+        
+        // For iOS 15+, we'd use date.formatted()
+        return formatDate(date)
+    }
+    
+    // Helper for iOS 14 compatibility
+    func formatDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
     }
 }
 
@@ -217,9 +366,16 @@ struct MediumChoreView: View {
                 
                 Spacer()
                 
-                Text(entry.date.formatted(date: .abbreviated, time: .shortened))
-                    .font(.caption)
-                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .black.opacity(0.6))
+                if #available(iOS 15.0, *) {
+                    Text(entry.date.formatted(date: .abbreviated, time: .shortened))
+                        .font(.caption)
+                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .black.opacity(0.6))
+                } else {
+                    // Fallback for older iOS versions
+                    Text(formatDate(entry.date))
+                        .font(.caption)
+                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .black.opacity(0.6))
+                }
             }
             
             if entry.chores.isEmpty {
@@ -239,7 +395,7 @@ struct MediumChoreView: View {
                 // Display up to 6 chores
                 ForEach(entry.chores.prefix(6)) { chore in
                     HStack {
-                        if let categoryColor = chore.categoryColor {
+                        if let categoryColor = chore.categoryColor, !categoryColor.isEmpty {
                             Circle()
                                 .fill(Color(categoryColor))
                                 .frame(width: 10, height: 10)
@@ -252,9 +408,16 @@ struct MediumChoreView: View {
                         Spacer()
                         
                         if let dueDate = chore.dueDate, Calendar.current.isDateInToday(dueDate) {
-                            Text(dueDate.formatted(date: .omitted, time: .shortened))
-                                .font(.caption)
-                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .black.opacity(0.6))
+                            if #available(iOS 15.0, *) {
+                                Text(dueDate.formatted(date: .omitted, time: .shortened))
+                                    .font(.caption)
+                                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .black.opacity(0.6))
+                            } else {
+                                // Fallback for older iOS versions
+                                Text(formatTimeOnly(dueDate))
+                                    .font(.caption)
+                                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .black.opacity(0.6))
+                            }
                         }
                     }
                     .padding(.vertical, 2)
@@ -274,6 +437,171 @@ struct MediumChoreView: View {
             )
         }
     }
+    
+    // Helper for iOS 14 compatibility
+    func formatDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+    
+    // Helper to format just the time
+    func formatTimeOnly(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+}
+
+struct LargeChoreView: View {
+    var entry: ChoreProvider.Entry
+    @Environment(\.colorScheme) var colorScheme
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("HTasks")
+                    .font(.headline)
+                    .fontWeight(.bold)
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                
+                Spacer()
+                
+                if #available(iOS 15.0, *) {
+                    Text(entry.date.formatted(date: .abbreviated, time: .shortened))
+                        .font(.caption)
+                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .black.opacity(0.6))
+                } else {
+                    // Fallback for older iOS versions
+                    Text(formatDate(entry.date))
+                        .font(.caption)
+                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .black.opacity(0.6))
+                }
+            }
+            
+            Text("Today's Pending Chores")
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
+                .padding(.top, 2)
+            
+            if entry.chores.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 36))
+                        .foregroundColor(.green)
+                    
+                    Text("All done!")
+                        .font(.system(.title3, design: .rounded))
+                        .fontWeight(.bold)
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                    
+                    Text("No pending chores")
+                        .font(.subheadline)
+                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.vertical, 30)
+            } else {
+                // Display all chores, we can fit more in the large widget
+                ForEach(entry.chores) { chore in
+                    HStack(spacing: 10) {
+                        if let categoryColor = chore.categoryColor, !categoryColor.isEmpty {
+                            Circle()
+                                .fill(Color(categoryColor))
+                                .frame(width: 12, height: 12)
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(chore.title)
+                                .font(.system(.body, design: .rounded))
+                                .lineLimit(1)
+                                .foregroundColor(colorScheme == .dark ? .white : .black)
+                            
+                            if let categoryName = chore.categoryName, !categoryName.isEmpty {
+                                Text(categoryName)
+                                    .font(.caption)
+                                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .black.opacity(0.6))
+                            }
+                        }
+                        
+                        Spacer()
+                        
+                        if let dueDate = chore.dueDate {
+                            Text(timeRemaining(for: dueDate))
+                                .font(.caption)
+                                .foregroundColor(isDueDateSoon(dueDate) ? .red : (colorScheme == .dark ? .white.opacity(0.6) : .black.opacity(0.6)))
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+            
+            Spacer()
+        }
+        .padding()
+        .containerBackground(for: .widget) {
+            LinearGradient(
+                gradient: Gradient(colors: colorScheme == .dark ? 
+                                  [Color.black, Color.blue.opacity(0.5)] : 
+                                  [Color.white, Color.blue.opacity(0.3)]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
+    }
+    
+    func isDueDateSoon(_ date: Date) -> Bool {
+        let timeInterval = date.timeIntervalSinceNow
+        // Return true if the due date is within the next 24 hours
+        return timeInterval >= 0 && timeInterval <= 86400 // 24 hours in seconds
+    }
+    
+    func timeRemaining(for date: Date) -> String {
+        let calendar = Calendar.current
+        
+        if calendar.isDateInToday(date) {
+            if #available(iOS 15.0, *) {
+                return "Today, " + date.formatted(date: .omitted, time: .shortened)
+            } else {
+                return "Today, " + formatTimeOnly(date)
+            }
+        } else if calendar.isDateInTomorrow(date) {
+            return "Tomorrow"
+        } else {
+            if #available(iOS 15.0, *) {
+                return date.formatted(date: .abbreviated, time: .omitted)
+            } else {
+                return formatDateOnly(date)
+            }
+        }
+    }
+    
+    // Helper for iOS 14 compatibility
+    func formatDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+    
+    // Helper to format just the time
+    func formatTimeOnly(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+    
+    // Helper to format just the date
+    func formatDateOnly(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .none
+        return formatter.string(from: date)
+    }
 }
 
 struct HTasksWidget: Widget {
@@ -285,7 +613,7 @@ struct HTasksWidget: Widget {
         }
         .configurationDisplayName("HTasks Chores")
         .description("See your upcoming chores at a glance.")
-        .supportedFamilies([.systemSmall, .systemMedium])
+        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
     }
 }
 
@@ -296,6 +624,11 @@ struct HTasksWidget_Previews: PreviewProvider {
         
         ChoreWidgetEntryView(entry: ChoreEntry(date: Date(), chores: WidgetChore.mockChores))
             .previewContext(WidgetPreviewContext(family: .systemMedium))
+        
+        ChoreWidgetEntryView(entry: ChoreEntry(date: Date(), chores: WidgetChore.mockChores))
+            .previewContext(WidgetPreviewContext(family: .systemLarge))
     }
 }
+
+
 

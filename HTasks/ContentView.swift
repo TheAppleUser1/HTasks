@@ -232,24 +232,30 @@ struct WelcomeView: View {
     
     private func saveChores() {
         do {
-            // Save the full chore data for the app
+            // Save the full chore data for the app to UserDefaults
             let encoded = try JSONEncoder().encode(chores)
             UserDefaults.standard.set(encoded, forKey: "savedChores")
             
-            // Save a simplified version for the widget
+            // Create detailed chore objects for the widget including categories and due dates
             let widgetChores = chores.map { chore -> [String: Any] in
                 var choreDict: [String: Any] = [
                     "id": chore.id.uuidString,
                     "title": chore.title,
-                    "isCompleted": chore.isCompleted
+                    "isCompleted": chore.isCompleted,
+                    "createdDate": chore.createdDate
                 ]
                 
-                if let categoryId = chore.categoryId,
-                   let category = getCategory(for: categoryId) {
-                    choreDict["categoryName"] = category.name
-                    choreDict["categoryColor"] = category.color
+                // Add category information if available
+                if let categoryId = chore.categoryId {
+                    choreDict["categoryId"] = categoryId.uuidString
+                    
+                    if let category = getCategory(for: categoryId) {
+                        choreDict["categoryName"] = category.name
+                        choreDict["categoryColor"] = category.color
+                    }
                 }
                 
+                // Add due date if available
                 if let dueDate = chore.dueDate {
                     choreDict["dueDate"] = dueDate
                 }
@@ -257,19 +263,27 @@ struct WelcomeView: View {
                 return choreDict
             }
             
-            UserDefaults.standard.set(try JSONSerialization.data(withJSONObject: widgetChores), 
-                                     forKey: "widgetChores")
-            UserDefaults.standard.synchronize()
-            
-            // Update widgets to refresh with new data
-            if #available(iOS 14.0, *) {
-                WidgetCenter.shared.reloadAllTimelines()
+            // Save to the shared App Group container for widget access
+            let widgetData = try JSONSerialization.data(withJSONObject: widgetChores)
+            if let userDefaults = UserDefaults(suiteName: "group.com.yourdomain.HTasks") {
+                userDefaults.set(widgetData, forKey: "widgetChores")
+            } else {
+                // Fallback to standard UserDefaults if app group is not available
+                UserDefaults.standard.set(widgetData, forKey: "widgetChores")
             }
             
-            print("Successfully saved \(chores.count) chores from WelcomeView")
+            // Tell the widget to refresh with new data
+            WidgetCenter.shared.reloadAllTimelines()
         } catch {
-            print("Failed to encode chores: \(error.localizedDescription)")
+            print("Failed to save chores: \(error)")
         }
+    }
+    
+    private func getCategory(for categoryId: UUID?) -> CategoryEntity? {
+        guard let categoryId = categoryId else { return nil }
+        
+        let categories = coreDataManager.fetchCategories()
+        return categories.first { $0.id?.uuidString == categoryId.uuidString }
     }
 }
 
@@ -703,24 +717,30 @@ struct HomeView: View {
     
     private func saveChores() {
         do {
-            // Save the full chore data for the app
+            // Save the full chore data for the app to UserDefaults
             let encoded = try JSONEncoder().encode(chores)
             UserDefaults.standard.set(encoded, forKey: "savedChores")
             
-            // Save a simplified version for the widget
+            // Create detailed chore objects for the widget including categories and due dates
             let widgetChores = chores.map { chore -> [String: Any] in
                 var choreDict: [String: Any] = [
                     "id": chore.id.uuidString,
                     "title": chore.title,
-                    "isCompleted": chore.isCompleted
+                    "isCompleted": chore.isCompleted,
+                    "createdDate": chore.createdDate
                 ]
                 
-                if let categoryId = chore.categoryId,
-                   let category = getCategory(for: categoryId) {
-                    choreDict["categoryName"] = category.name
-                    choreDict["categoryColor"] = category.color
+                // Add category information if available
+                if let categoryId = chore.categoryId {
+                    choreDict["categoryId"] = categoryId.uuidString
+                    
+                    if let category = getCategory(for: categoryId) {
+                        choreDict["categoryName"] = category.name
+                        choreDict["categoryColor"] = category.color
+                    }
                 }
                 
+                // Add due date if available
                 if let dueDate = chore.dueDate {
                     choreDict["dueDate"] = dueDate
                 }
@@ -728,18 +748,19 @@ struct HomeView: View {
                 return choreDict
             }
             
-            UserDefaults.standard.set(try JSONSerialization.data(withJSONObject: widgetChores), 
-                                     forKey: "widgetChores")
-            UserDefaults.standard.synchronize()
-            
-            // Update widgets to refresh with new data
-            if #available(iOS 14.0, *) {
-                WidgetCenter.shared.reloadAllTimelines()
+            // Save to the shared App Group container for widget access
+            let widgetData = try JSONSerialization.data(withJSONObject: widgetChores)
+            if let userDefaults = UserDefaults(suiteName: "group.com.yourdomain.HTasks") {
+                userDefaults.set(widgetData, forKey: "widgetChores")
+            } else {
+                // Fallback to standard UserDefaults if app group is not available
+                UserDefaults.standard.set(widgetData, forKey: "widgetChores")
             }
             
-            print("Successfully saved \(chores.count) chores from HomeView")
+            // Tell the widget to refresh with new data
+            WidgetCenter.shared.reloadAllTimelines()
         } catch {
-            print("Failed to encode chores: \(error.localizedDescription)")
+            print("Failed to save chores: \(error)")
         }
     }
     
