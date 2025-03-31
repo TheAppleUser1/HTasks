@@ -99,17 +99,51 @@ struct Statistics: Codable {
 
 class CloudKitManager: ObservableObject {
     static let shared = CloudKitManager()
-    private let container = CKContainer.default()
+    private let container: CKContainer
     private let database: CKDatabase
     
     @Published var isSyncing = false
     @Published var lastSyncDate: Date?
+    @Published var isAvailable = false
     
     private init() {
+        container = CKContainer.default()
         database = container.privateCloudDatabase
+        
+        // Check iCloud status
+        Task {
+            do {
+                try await checkAccountStatus()
+                isAvailable = true
+            } catch {
+                print("iCloud not available: \(error.localizedDescription)")
+                isAvailable = false
+            }
+        }
     }
     
+    private func checkAccountStatus() async throws {
+        let accountStatus = try await container.accountStatus()
+        switch accountStatus {
+        case .available:
+            return
+        case .noAccount:
+            throw NSError(domain: "CloudKit", code: 1, userInfo: [NSLocalizedDescriptionKey: "No iCloud account found"])
+        case .restricted:
+            throw NSError(domain: "CloudKit", code: 2, userInfo: [NSLocalizedDescriptionKey: "iCloud access is restricted"])
+        case .couldNotDetermine:
+            throw NSError(domain: "CloudKit", code: 3, userInfo: [NSLocalizedDescriptionKey: "Could not determine iCloud status"])
+        @unknown default:
+            throw NSError(domain: "CloudKit", code: 4, userInfo: [NSLocalizedDescriptionKey: "Unknown iCloud status"])
+        }
+    }
+    
+    // Update sync functions to check availability first
     func syncChores(_ chores: [Chore]) async throws {
+        guard isAvailable else {
+            throw NSError(domain: "CloudKit", code: 5, userInfo: [NSLocalizedDescriptionKey: "iCloud is not available"])
+        }
+        
         isSyncing = true
         defer { isSyncing = false }
         
@@ -127,13 +161,19 @@ class CloudKitManager: ObservableObject {
             record.setValue(chore.isCompleted, forKey: "isCompleted")
             record.setValue(chore.categoryId?.uuidString, forKey: "categoryId")
             record.setValue(chore.dueDate, forKey: "dueDate")
+            record.setValue(chore.creationDate, forKey: "creationDate")
             try await database.save(record)
         }
         
         lastSyncDate = Date()
     }
     
+    // Update other sync functions similarly
     func syncCategories(_ categories: [Category]) async throws {
+        guard isAvailable else {
+            throw NSError(domain: "CloudKit", code: 5, userInfo: [NSLocalizedDescriptionKey: "iCloud is not available"])
+        }
+        
         let query = CKQuery(recordType: "Category", predicate: NSPredicate(value: true))
         let (_, records, _) = try await database.records(matching: query)
         for record in records {
@@ -149,6 +189,10 @@ class CloudKitManager: ObservableObject {
     }
     
     func syncStatistics(_ statistics: Statistics) async throws {
+        guard isAvailable else {
+            throw NSError(domain: "CloudKit", code: 5, userInfo: [NSLocalizedDescriptionKey: "iCloud is not available"])
+        }
+        
         let query = CKQuery(recordType: "Statistics", predicate: NSPredicate(value: true))
         let (_, records, _) = try await database.records(matching: query)
         for record in records {
@@ -160,11 +204,21 @@ class CloudKitManager: ObservableObject {
         record.setValue(statistics.currentStreak, forKey: "currentStreak")
         record.setValue(statistics.bestStreak, forKey: "bestStreak")
         record.setValue(statistics.lastCompletionDate, forKey: "lastCompletionDate")
-        record.setValue(statistics.categoryCompletions, forKey: "categoryCompletions")
+        
+        // Convert UUID keys to strings for CloudKit storage
+        let categoryCompletions = Dictionary(uniqueKeysWithValues: statistics.categoryCompletions.map { 
+            ($0.key.uuidString, $0.value)
+        })
+        record.setValue(categoryCompletions, forKey: "categoryCompletions")
+        
         try await database.save(record)
     }
     
     func syncAchievements(_ achievements: [Achievement]) async throws {
+        guard isAvailable else {
+            throw NSError(domain: "CloudKit", code: 5, userInfo: [NSLocalizedDescriptionKey: "iCloud is not available"])
+        }
+        
         let query = CKQuery(recordType: "Achievement", predicate: NSPredicate(value: true))
         let (_, records, _) = try await database.records(matching: query)
         for record in records {
