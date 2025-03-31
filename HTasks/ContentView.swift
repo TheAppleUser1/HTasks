@@ -214,7 +214,7 @@ enum CloudKitError: Error {
 class AIMotivationManager: ObservableObject {
     static let shared = AIMotivationManager()
     
-    private let motivationalTemplates = [
+    private let motivationalTemplates: [String: [String: [String]]] = [
         "time": [
             "short": [
                 "Hey! That %@ isn't going to clean itself!",
@@ -250,9 +250,11 @@ class AIMotivationManager: ObservableObject {
             ]
         ],
         "streak": [
-            "Don't break your %d-day streak!",
-            "Keep that %d-day streak going!",
-            "You're on fire with that %d-day streak!"
+            "default": [
+                "Don't break your %d-day streak!",
+                "Keep that %d-day streak going!",
+                "You're on fire with that %d-day streak!"
+            ]
         ]
     ]
     
@@ -261,13 +263,21 @@ class AIMotivationManager: ObservableObject {
         let category = getCategoryName(for: chore.categoryId)
         
         // Time-based messages
+        let timeCategory: String
         if timeSinceCreation < 24 {
-            return String(format: motivationalTemplates["time"]!["short"]!.randomElement()!, chore.title)
+            timeCategory = "short"
         } else if timeSinceCreation < 72 {
-            return String(format: motivationalTemplates["time"]!["medium"]!.randomElement()!, chore.title)
+            timeCategory = "medium"
         } else {
-            return String(format: motivationalTemplates["time"]!["long"]!.randomElement()!, chore.title)
+            timeCategory = "long"
         }
+        
+        if let timeMessages = motivationalTemplates["time"]?[timeCategory],
+           let message = timeMessages.randomElement() {
+            return String(format: message, chore.title)
+        }
+        
+        return "Time to complete your chore!"
     }
     
     private func getCategoryName(for categoryId: UUID?) -> String {
@@ -405,7 +415,7 @@ struct WelcomeView: View {
         }
         .padding()
         .sheet(isPresented: $showingAddChore) {
-            AddChoreView(chores: $chores, isPresented: $showingAddChore)
+            AddChoreView(chores: $chores, categories: $categories, statistics: $statistics, notificationManager: NotificationManager())
         }
     }
 }
@@ -533,12 +543,7 @@ struct HomeView: View {
                 }
             }
             .sheet(isPresented: $showingAddChore) {
-                AddChoreView(
-                    chores: $chores,
-                    categories: $categories,
-                    statistics: $statistics,
-                    notificationManager: notificationManager
-                )
+                AddChoreView(chores: $chores, categories: $categories, statistics: $statistics, notificationManager: NotificationManager())
             }
             .sheet(isPresented: $showingSettingsSheet) {
                 SettingsView(
@@ -672,14 +677,14 @@ struct CategoryButton: View {
 
 struct AddChoreView: View {
     @Binding var chores: [Chore]
-    @Binding var isPresented: Bool
+    @Binding var categories: [Category]
+    @Binding var statistics: Statistics
+    let notificationManager: NotificationManager
+    @Environment(\.dismiss) var dismiss
     @State private var newChoreTitle = ""
     @State private var selectedCategoryId: UUID?
     @State private var dueDate: Date?
     @State private var showingDatePicker = false
-    let categories: [Category]
-    let statistics: Statistics
-    let notificationManager: NotificationManager
     
     var body: some View {
         NavigationView {
@@ -717,7 +722,7 @@ struct AddChoreView: View {
             .navigationTitle("Add New Chore")
             .navigationBarItems(
                 leading: Button("Cancel") {
-                    isPresented = false
+                    dismiss()
                 },
                 trailing: Button("Add") {
                     let newChore = Chore(
@@ -730,7 +735,7 @@ struct AddChoreView: View {
                     saveChores()
                     notificationManager.scheduleMotivationalNotification(for: newChore, statistics: statistics)
                     newChoreTitle = ""
-                    isPresented = false
+                    dismiss()
                 }
                 .disabled(newChoreTitle.isEmpty)
             )
@@ -738,12 +743,9 @@ struct AddChoreView: View {
     }
     
     private func saveChores() {
-        do {
-            let encoded = try JSONEncoder().encode(chores)
-            UserDefaults.standard.set(encoded, forKey: "savedChores")
+        if let encoded = try? JSONEncoder().encode(chores) {
+            UserDefaults.standard.set(encoded, forKey: "chores")
             UserDefaults.standard.synchronize()
-        } catch {
-            print("Failed to save chores: \(error.localizedDescription)")
         }
     }
 }
