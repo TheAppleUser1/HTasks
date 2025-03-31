@@ -390,20 +390,37 @@ class AIMotivationManager: ObservableObject {
 class NotificationManager: ObservableObject {
     static let shared = NotificationManager()
     private let center = UNUserNotificationCenter.current()
+    @Published var isAuthorized = false
     
-    private init() {} // Make init private for singleton
+    private init() {
+        // Check authorization status on init
+        center.getNotificationSettings { settings in
+            DispatchQueue.main.async {
+                self.isAuthorized = settings.authorizationStatus == .authorized
+            }
+        }
+    }
     
-    func requestAuthorization() {
-        center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
-            if granted {
-                print("Notification permission granted")
-            } else if let error = error {
-                print("Error requesting notification permission: \(error.localizedDescription)")
+    func requestAuthorization() async {
+        do {
+            let granted = try await center.requestAuthorization(options: [.alert, .sound, .badge])
+            await MainActor.run {
+                self.isAuthorized = granted
+            }
+        } catch {
+            print("Error requesting notification permission: \(error.localizedDescription)")
+            await MainActor.run {
+                self.isAuthorized = false
             }
         }
     }
     
     func scheduleMotivationalNotification(for chore: Chore, statistics: Statistics) {
+        guard isAuthorized else {
+            print("Notifications not authorized")
+            return
+        }
+        
         let content = UNMutableNotificationContent()
         content.title = "Time to Get Moving!"
         content.body = AIMotivationManager.shared.generateMessage(for: chore, statistics: statistics)
@@ -434,6 +451,7 @@ struct ContentView: View {
     @State private var categories: [Category] = []
     @State private var statistics = Statistics()
     @State private var achievements: [Achievement] = []
+    @StateObject private var cloudKit = CloudKitManager.shared
     
     var body: some View {
         Group {
@@ -451,6 +469,62 @@ struct ContentView: View {
                     statistics: $statistics,
                     achievements: $achievements
                 )
+            }
+        }
+        .onAppear {
+            loadData()
+        }
+    }
+    
+    private func loadData() {
+        // Load chores
+        if let data = UserDefaults.standard.data(forKey: "chores"),
+           let savedChores = try? JSONDecoder().decode([Chore].self, from: data) {
+            chores = savedChores
+            print("Loaded \(savedChores.count) chores")
+        }
+        
+        // Load categories
+        if let data = UserDefaults.standard.data(forKey: "categories"),
+           let savedCategories = try? JSONDecoder().decode([Category].self, from: data) {
+            categories = savedCategories
+            print("Loaded \(savedCategories.count) categories")
+        }
+        
+        // Load statistics
+        if let data = UserDefaults.standard.data(forKey: "statistics"),
+           let savedStats = try? JSONDecoder().decode(Statistics.self, from: data) {
+            statistics = savedStats
+            print("Loaded statistics")
+        }
+        
+        // Load achievements
+        if let data = UserDefaults.standard.data(forKey: "achievements"),
+           let savedAchievements = try? JSONDecoder().decode([Achievement].self, from: data) {
+            achievements = savedAchievements
+            print("Loaded \(savedAchievements.count) achievements")
+        }
+        
+        // Check if we should skip welcome screen
+        let hasSeenWelcome = UserDefaults.standard.bool(forKey: "hasSeenWelcome")
+        if hasSeenWelcome || !chores.isEmpty {
+            isWelcomeActive = false
+        }
+        
+        // Try to load from iCloud if available
+        if cloudKit.isAvailable {
+            Task {
+                do {
+                    let cloudChores = try await cloudKit.fetchChores()
+                    if !cloudChores.isEmpty {
+                        await MainActor.run {
+                            chores = cloudChores
+                            print("Loaded \(cloudChores.count) chores from iCloud")
+                        }
+                    }
+                } catch {
+                    print("Failed to load chores from iCloud: \(error.localizedDescription)")
+                }
             }
         }
     }
@@ -532,8 +606,8 @@ struct WelcomeView: View {
                 statistics: $statistics
             )
         }
-        .onAppear {
-            notificationManager.requestAuthorization()
+        .task {
+            await notificationManager.requestAuthorization()
         }
     }
 }
@@ -546,95 +620,12 @@ struct HomeView: View {
     @StateObject private var cloudKit = CloudKitManager.shared
     @State private var showingAddChore = false
     @State private var showingSettingsSheet = false
-    @State private var settings = UserSettings()
+    @State private var settings = UserSettings.load() // Load settings properly
     @StateObject private var notificationManager = NotificationManager.shared
     @State private var showingDeleteAlert = false
     @State private var choreToDelete: Chore?
     @State private var syncError: Error?
     @State private var showingSyncError = false
-    
-    private func saveChores() {
-        if let encoded = try? JSONEncoder().encode(chores) {
-            UserDefaults.standard.set(encoded, forKey: "chores")
-            UserDefaults.standard.synchronize()
-            
-            if cloudKit.isAvailable {
-                Task {
-                    do {
-                        try await cloudKit.syncChores(chores)
-                    } catch {
-                        DispatchQueue.main.async {
-                            syncError = error
-                            showingSyncError = true
-                        }
-                    }
-                }
-            }
-        }
-    }
-    
-    private func saveStatistics() {
-        if let encoded = try? JSONEncoder().encode(statistics) {
-            UserDefaults.standard.set(encoded, forKey: "statistics")
-            UserDefaults.standard.synchronize()
-            
-            if cloudKit.isAvailable {
-                Task {
-                    do {
-                        try await cloudKit.syncStatistics(statistics)
-                    } catch {
-                        DispatchQueue.main.async {
-                            syncError = error
-                            showingSyncError = true
-                        }
-                    }
-                }
-            }
-        }
-    }
-    
-    private func saveCategories() {
-        if let encoded = try? JSONEncoder().encode(categories) {
-            UserDefaults.standard.set(encoded, forKey: "categories")
-            UserDefaults.standard.synchronize()
-            
-            if cloudKit.isAvailable {
-                Task {
-                    do {
-                        try await cloudKit.syncCategories(categories)
-                    } catch {
-                        DispatchQueue.main.async {
-                            syncError = error
-                            showingSyncError = true
-                        }
-                    }
-                }
-            }
-        }
-    }
-    
-    private func completeChore(_ chore: Chore) {
-        if let index = chores.firstIndex(where: { $0.id == chore.id }) {
-            chores[index].isCompleted = true
-            statistics.updateForChoreCompletion(chore: chores[index])
-            
-            saveChores()
-            saveStatistics()
-            
-            // Cancel notification for completed chore
-            notificationManager.cancelNotification(for: chore.id)
-        }
-    }
-    
-    private func deleteChore(_ chore: Chore) {
-        if let index = chores.firstIndex(where: { $0.id == chore.id }) {
-            chores.remove(at: index)
-            saveChores()
-            
-            // Cancel notification for deleted chore
-            notificationManager.cancelNotification(for: chore.id)
-        }
-    }
     
     var body: some View {
         NavigationView {
@@ -708,6 +699,71 @@ struct HomeView: View {
                 Button("OK", role: .cancel) { }
             } message: {
                 Text(syncError?.localizedDescription ?? "Unknown error occurred while syncing")
+            }
+        }
+    }
+    
+    private func completeChore(_ chore: Chore) {
+        if let index = chores.firstIndex(where: { $0.id == chore.id }) {
+            var updatedChore = chores[index]
+            updatedChore.isCompleted = true
+            chores[index] = updatedChore
+            statistics.updateForChoreCompletion(chore: updatedChore)
+            
+            saveChores()
+            saveStatistics()
+            
+            // Cancel notification for completed chore
+            notificationManager.cancelNotification(for: chore.id)
+        }
+    }
+    
+    private func deleteChore(_ chore: Chore) {
+        if let index = chores.firstIndex(where: { $0.id == chore.id }) {
+            chores.remove(at: index)
+            saveChores()
+            
+            // Cancel notification for deleted chore
+            notificationManager.cancelNotification(for: chore.id)
+        }
+    }
+    
+    private func saveChores() {
+        if let encoded = try? JSONEncoder().encode(chores) {
+            UserDefaults.standard.set(encoded, forKey: "chores")
+            UserDefaults.standard.synchronize()
+            
+            if cloudKit.isAvailable {
+                Task {
+                    do {
+                        try await cloudKit.syncChores(chores)
+                    } catch {
+                        DispatchQueue.main.async {
+                            syncError = error
+                            showingSyncError = true
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    private func saveStatistics() {
+        if let encoded = try? JSONEncoder().encode(statistics) {
+            UserDefaults.standard.set(encoded, forKey: "statistics")
+            UserDefaults.standard.synchronize()
+            
+            if cloudKit.isAvailable {
+                Task {
+                    do {
+                        try await cloudKit.syncStatistics(statistics)
+                    } catch {
+                        DispatchQueue.main.async {
+                            syncError = error
+                            showingSyncError = true
+                        }
+                    }
+                }
             }
         }
     }
@@ -843,10 +899,12 @@ struct AddChoreView: View {
     @Environment(\.dismiss) var dismiss
     @State private var newChoreTitle = ""
     @State private var selectedCategoryId: UUID?
-    @State private var dueDate: Date?
+    @State private var dueDate = Date()
     @State private var showingDatePicker = false
     @State private var syncError: Error?
     @State private var showingSyncError = false
+    @State private var showingError = false
+    @State private var errorMessage = ""
     
     var body: some View {
         NavigationView {
@@ -854,16 +912,18 @@ struct AddChoreView: View {
                 Section(header: Text("Chore Details")) {
                     TextField("Chore name", text: $newChoreTitle)
                     
-                    Picker("Category", selection: $selectedCategoryId) {
-                        Text("No Category").tag(Optional<UUID>.none)
-                        ForEach(categories) { category in
-                            HStack {
-                                Circle()
-                                    .fill(Color(category.color))
-                                    .frame(width: 12, height: 12)
-                                Text(category.name)
+                    if !categories.isEmpty {
+                        Picker("Category", selection: $selectedCategoryId) {
+                            Text("No Category").tag(Optional<UUID>.none)
+                            ForEach(categories) { category in
+                                HStack {
+                                    Circle()
+                                        .fill(Color(category.color))
+                                        .frame(width: 12, height: 12)
+                                    Text(category.name)
+                                }
+                                .tag(Optional(category.id))
                             }
-                            .tag(Optional(category.id))
                         }
                     }
                     
@@ -872,10 +932,7 @@ struct AddChoreView: View {
                     if showingDatePicker {
                         DatePicker(
                             "Due Date",
-                            selection: Binding(
-                                get: { dueDate ?? Date() },
-                                set: { dueDate = $0 }
-                            ),
+                            selection: $dueDate,
                             displayedComponents: [.date]
                         )
                     }
@@ -887,10 +944,17 @@ struct AddChoreView: View {
                     dismiss()
                 },
                 trailing: Button("Add") {
-                    addChore()
+                    Task {
+                        await addChore()
+                    }
                 }
                 .disabled(newChoreTitle.isEmpty)
             )
+            .alert("Error", isPresented: $showingError) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(errorMessage)
+            }
             .alert("Sync Error", isPresented: $showingSyncError) {
                 Button("OK", role: .cancel) { }
             } message: {
@@ -899,36 +963,52 @@ struct AddChoreView: View {
         }
     }
     
-    private func addChore() {
+    private func addChore() async {
+        guard !newChoreTitle.isEmpty else {
+            errorMessage = "Please enter a chore name"
+            showingError = true
+            return
+        }
+        
         let newChore = Chore(
-            title: newChoreTitle,
+            title: newChoreTitle.trimmingCharacters(in: .whitespacesAndNewlines),
             isCompleted: false,
             categoryId: selectedCategoryId,
-            createdDate: showingDatePicker ? dueDate ?? Date() : Date()
+            createdDate: showingDatePicker ? dueDate : Date()
         )
-        chores.append(newChore)
-        saveChores()
-        notificationManager.scheduleMotivationalNotification(for: newChore, statistics: statistics)
-        newChoreTitle = ""
-        dismiss()
-    }
-    
-    private func saveChores() {
+        
+        await MainActor.run {
+            chores.append(newChore)
+        }
+        
+        // Save to UserDefaults
         if let encoded = try? JSONEncoder().encode(chores) {
             UserDefaults.standard.set(encoded, forKey: "chores")
             UserDefaults.standard.synchronize()
             
+            // Schedule notification
+            notificationManager.scheduleMotivationalNotification(for: newChore, statistics: statistics)
+            
+            // Sync to iCloud if available
             if cloudKit.isAvailable {
-                Task {
-                    do {
-                        try await cloudKit.syncChores(chores)
-                    } catch {
-                        DispatchQueue.main.async {
-                            syncError = error
-                            showingSyncError = true
-                        }
+                do {
+                    try await cloudKit.syncChores(chores)
+                } catch {
+                    await MainActor.run {
+                        syncError = error
+                        showingSyncError = true
+                        return
                     }
                 }
+            }
+            
+            await MainActor.run {
+                dismiss()
+            }
+        } else {
+            await MainActor.run {
+                errorMessage = "Failed to save chore"
+                showingError = true
             }
         }
     }
