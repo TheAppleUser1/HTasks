@@ -6,13 +6,11 @@
 //
 
 import SwiftUI
-import CloudKit
-import UserNotifications
 
 struct Category: Identifiable, Codable {
-    let id: UUID
+    var id: UUID
     var name: String
-    var color: String // Store as hex string
+    var color: String
     
     init(id: UUID = UUID(), name: String, color: String) {
         self.id = id
@@ -22,699 +20,645 @@ struct Category: Identifiable, Codable {
 }
 
 struct Chore: Identifiable, Codable {
-    let id: UUID
+    var id: UUID
     var title: String
-    var isCompleted: Bool
+    var isCompleted = false
     var categoryId: UUID?
-    var createdDate: Date
+    var createdDate = Date()
+    var dueDate: Date?
     
-    init(id: UUID = UUID(), title: String, isCompleted: Bool = false, categoryId: UUID? = nil, createdDate: Date = Date()) {
+    init(id: UUID = UUID(), title: String, isCompleted: Bool = false, categoryId: UUID? = nil, createdDate: Date = Date(), dueDate: Date? = nil) {
         self.id = id
         self.title = title
         self.isCompleted = isCompleted
         self.categoryId = categoryId
         self.createdDate = createdDate
+        self.dueDate = dueDate
+    }
+    
+    init(from entity: ChoreEntity) {
+        self.id = entity.id ?? UUID()
+        self.title = entity.title ?? "Untitled"
+        self.isCompleted = entity.isCompleted
+        self.categoryId = entity.categoryID
+        self.createdDate = entity.createdDate ?? Date()
+        self.dueDate = entity.dueDate
     }
 }
 
 struct UserSettings: Codable {
     var showDeleteConfirmation: Bool = true
     var deleteConfirmationText: String = "We offer no liability if your mother gets mad :P"
-    var autoBackupToiCloud: Bool = true
-    
-    static func load() -> UserSettings {
-        if let data = UserDefaults.standard.data(forKey: "userSettings") {
-            do {
-                return try JSONDecoder().decode(UserSettings.self, from: data)
-            } catch {
-                print("Failed to load settings: \(error.localizedDescription)")
-            }
-        }
-        return UserSettings()
-    }
-    
-    func save() {
-        do {
-            let encoded = try JSONEncoder().encode(self)
-            UserDefaults.standard.set(encoded, forKey: "userSettings")
-            UserDefaults.standard.synchronize()
-        } catch {
-            print("Failed to save settings: \(error.localizedDescription)")
-        }
-    }
-}
-
-struct Achievement: Identifiable, Codable {
-    let id: UUID
-    let title: String
-    let description: String
-    let icon: String
-    let requirement: Int
-    let type: AchievementType
-    var isUnlocked: Bool
-    
-    enum AchievementType: String, Codable {
-        case totalCompleted
-        case streak
-        case categoryCompletion
-    }
-}
-
-struct Statistics: Codable {
-    var totalCompleted: Int = 0
-    var currentStreak: Int = 0
-    var bestStreak: Int = 0
-    var lastCompletionDate: Date?
-    var categoryCompletions: [UUID: Int] = [:]
-    
-    init() {
-        // Empty init is fine since we have default values
-    }
-    
-    mutating func updateForChoreCompletion(chore: Chore) {
-        totalCompleted += 1
-        
-        if let categoryId = chore.categoryId {
-            categoryCompletions[categoryId, default: 0] += 1
-        }
-        
-        if let lastCompletion = lastCompletionDate {
-            let calendar = Calendar.current
-            let daysSinceLastCompletion = calendar.dateComponents([.day], from: lastCompletion, to: Date()).day ?? 0
-            
-            if daysSinceLastCompletion == 1 {
-                currentStreak += 1
-                bestStreak = max(bestStreak, currentStreak)
-            } else if daysSinceLastCompletion > 1 {
-                currentStreak = 1
-            }
-        } else {
-            currentStreak = 1
-        }
-        
-        lastCompletionDate = Date()
-    }
-}
-
-class CloudKitManager: ObservableObject {
-    static let shared = CloudKitManager()
-    private let container: CKContainer
-    private let database: CKDatabase
-    @Published var isAvailable = false
-    @Published var lastSyncDate: Date?
-    
-    init() {
-        self.container = CKContainer.default()
-        self.database = container.privateCloudDatabase
-        Task {
-            await checkAccountStatus()
-        }
-    }
-    
-    func checkAccountStatus() async {
-        do {
-            let accountStatus = try await container.accountStatus()
-            DispatchQueue.main.async {
-                self.isAvailable = accountStatus == .available
-            }
-        } catch {
-            print("Error checking iCloud status: \(error)")
-            DispatchQueue.main.async {
-                self.isAvailable = false
-            }
-        }
-    }
-    
-    func syncChores(_ chores: [Chore]) async throws {
-        guard isAvailable else { throw CloudKitError.iCloudNotAvailable }
-        
-        // Delete existing records
-        let query = CKQuery(recordType: "Chore", predicate: NSPredicate(value: true))
-        let (matchResults, _) = try await database.records(matching: query)
-        try await withThrowingTaskGroup(of: Void.self) { group in
-            for (recordID, _) in matchResults {
-                group.addTask {
-                    try await self.database.deleteRecord(withID: recordID)
-                }
-            }
-        }
-        
-        // Save new records
-        try await withThrowingTaskGroup(of: Void.self) { group in
-            for chore in chores {
-                group.addTask {
-                    let record = CKRecord(recordType: "Chore")
-                    record.setValue(chore.id.uuidString, forKey: "id")
-                    record.setValue(chore.title, forKey: "title")
-                    record.setValue(chore.isCompleted, forKey: "isCompleted")
-                    record.setValue(chore.categoryId?.uuidString, forKey: "categoryId")
-                    record.setValue(chore.createdDate, forKey: "createdDate")
-                    try await self.database.save(record)
-                }
-            }
-        }
-        
-        DispatchQueue.main.async {
-            self.lastSyncDate = Date()
-        }
-    }
-    
-    func syncCategories(_ categories: [Category]) async throws {
-        guard isAvailable else { throw CloudKitError.iCloudNotAvailable }
-        
-        let query = CKQuery(recordType: "Category", predicate: NSPredicate(value: true))
-        let (matchResults, _) = try await database.records(matching: query)
-        try await withThrowingTaskGroup(of: Void.self) { group in
-            for (recordID, _) in matchResults {
-                group.addTask {
-                    try await self.database.deleteRecord(withID: recordID)
-                }
-            }
-        }
-        
-        try await withThrowingTaskGroup(of: Void.self) { group in
-            for category in categories {
-                group.addTask {
-                    let record = CKRecord(recordType: "Category")
-                    record.setValue(category.id.uuidString, forKey: "id")
-                    record.setValue(category.name, forKey: "name")
-                    record.setValue(category.color, forKey: "color")
-                    try await self.database.save(record)
-                }
-            }
-        }
-        
-        DispatchQueue.main.async {
-            self.lastSyncDate = Date()
-        }
-    }
-    
-    func syncStatistics(_ statistics: Statistics) async throws {
-        guard isAvailable else { throw CloudKitError.iCloudNotAvailable }
-        
-        let query = CKQuery(recordType: "Statistics", predicate: NSPredicate(value: true))
-        let (matchResults, _) = try await database.records(matching: query)
-        try await withThrowingTaskGroup(of: Void.self) { group in
-            for (recordID, _) in matchResults {
-                group.addTask {
-                    try await self.database.deleteRecord(withID: recordID)
-                }
-            }
-        }
-        
-        let record = CKRecord(recordType: "Statistics")
-        record.setValue(statistics.totalCompleted, forKey: "totalCompleted")
-        record.setValue(statistics.currentStreak, forKey: "currentStreak")
-        record.setValue(statistics.bestStreak, forKey: "bestStreak")
-        record.setValue(statistics.lastCompletionDate, forKey: "lastCompletionDate")
-        
-        // Convert UUID dictionary to string keys for CloudKit storage
-        let categoryCompletionsStringKeys = statistics.categoryCompletions.reduce(into: [:]) { result, entry in
-            result[entry.key.uuidString] = entry.value
-        }
-        record.setValue(categoryCompletionsStringKeys, forKey: "categoryCompletions")
-        
-        try await database.save(record)
-        
-        DispatchQueue.main.async {
-            self.lastSyncDate = Date()
-        }
-    }
-    
-    func syncAchievements(_ achievements: [Achievement]) async throws {
-        guard isAvailable else { throw CloudKitError.iCloudNotAvailable }
-        
-        let query = CKQuery(recordType: "Achievement", predicate: NSPredicate(value: true))
-        let (matchResults, _) = try await database.records(matching: query)
-        try await withThrowingTaskGroup(of: Void.self) { group in
-            for (recordID, _) in matchResults {
-                group.addTask {
-                    try await self.database.deleteRecord(withID: recordID)
-                }
-            }
-        }
-        
-        try await withThrowingTaskGroup(of: Void.self) { group in
-            for achievement in achievements {
-                group.addTask {
-                    let record = CKRecord(recordType: "Achievement")
-                    record.setValue(achievement.id.uuidString, forKey: "id")
-                    record.setValue(achievement.title, forKey: "title")
-                    record.setValue(achievement.description, forKey: "description")
-                    record.setValue(achievement.icon, forKey: "icon")
-                    record.setValue(achievement.requirement, forKey: "requirement")
-                    record.setValue(achievement.type.rawValue, forKey: "type")
-                    record.setValue(achievement.isUnlocked, forKey: "isUnlocked")
-                    try await self.database.save(record)
-                }
-            }
-        }
-        
-        DispatchQueue.main.async {
-            self.lastSyncDate = Date()
-        }
-    }
-    
-    func fetchChores() async throws -> [Chore] {
-        guard isAvailable else { throw CloudKitError.iCloudNotAvailable }
-        
-        let query = CKQuery(recordType: "Chore", predicate: NSPredicate(value: true))
-        let (matchResults, _) = try await database.records(matching: query)
-        
-        return try matchResults.compactMap { _, result in
-            let record = try result.get()
-            guard let idString = record.value(forKey: "id") as? String,
-                  let id = UUID(uuidString: idString),
-                  let title = record.value(forKey: "title") as? String,
-                  let isCompleted = record.value(forKey: "isCompleted") as? Bool,
-                  let createdDate = record.value(forKey: "createdDate") as? Date else {
-                return nil
-            }
-            
-            let categoryIdString = record.value(forKey: "categoryId") as? String
-            let categoryId = categoryIdString.flatMap { UUID(uuidString: $0) }
-            
-            return Chore(
-                id: id,
-                title: title,
-                isCompleted: isCompleted,
-                categoryId: categoryId,
-                createdDate: createdDate
-            )
-        }
-    }
-}
-
-enum CloudKitError: Error {
-    case iCloudNotAvailable
-    case saveFailed(Error)
-    case fetchFailed(Error)
-    case deleteFailed(Error)
-}
-
-class AIMotivationManager: ObservableObject {
-    static let shared = AIMotivationManager()
-    
-    private let motivationalTemplates: [String: [String: [String]]] = [
-        "time": [
-            "short": [
-                "Hey! That %@ isn't going to clean itself!",
-                "Quick reminder: %@ is still waiting for you",
-                "Don't forget about %@! It's been a while"
-            ],
-            "medium": [
-                "Your %@ is feeling neglected...",
-                "That %@ has been waiting patiently",
-                "Time to tackle that %@ you've been avoiding"
-            ],
-            "long": [
-                "Your %@ is collecting dust (literally)",
-                "That %@ is starting to look like a science experiment",
-                "Your %@ is begging for attention"
-            ]
-        ],
-        "category": [
-            "kitchen": [
-                "Your kitchen is calling for a cleanup!",
-                "Those dishes won't wash themselves",
-                "Time to make your kitchen sparkle again"
-            ],
-            "bathroom": [
-                "Your bathroom needs some TLC",
-                "Time to freshen up your bathroom",
-                "Your bathroom is waiting for a makeover"
-            ],
-            "bedroom": [
-                "Your bedroom is looking a bit messy",
-                "Time to make your bed and tidy up",
-                "Your bedroom needs some organization"
-            ]
-        ],
-        "streak": [
-            "default": [
-                "Don't break your %d-day streak!",
-                "Keep that %d-day streak going!",
-                "You're on fire with that %d-day streak!"
-            ]
-        ]
-    ]
-    
-    func generateMessage(for chore: Chore, statistics: Statistics) -> String {
-        let timeSinceCreation = Calendar.current.dateComponents([.hour], from: chore.createdDate, to: Date()).hour ?? 0
-        let category = getCategoryName(for: chore.categoryId)
-        
-        // Time-based messages
-        let timeCategory: String
-        if timeSinceCreation < 24 {
-            timeCategory = "short"
-        } else if timeSinceCreation < 72 {
-            timeCategory = "medium"
-        } else {
-            timeCategory = "long"
-        }
-        
-        if let timeMessages = motivationalTemplates["time"]?[timeCategory],
-           let message = timeMessages.randomElement() {
-            return String(format: message, chore.title)
-        }
-        
-        return "Time to complete your chore!"
-    }
-    
-    private func getCategoryName(for categoryId: UUID?) -> String {
-        // This would be replaced with actual category lookup
-        return "general"
-    }
-}
-
-class NotificationManager: ObservableObject {
-    static let shared = NotificationManager()
-    private let center = UNUserNotificationCenter.current()
-    @Published var isAuthorized = false
-    
-    private init() {
-        // Check authorization status on init
-        center.getNotificationSettings { settings in
-            DispatchQueue.main.async {
-                self.isAuthorized = settings.authorizationStatus == .authorized
-            }
-        }
-    }
-    
-    func requestAuthorization() async {
-        do {
-            let granted = try await center.requestAuthorization(options: [.alert, .sound, .badge])
-            await MainActor.run {
-                self.isAuthorized = granted
-            }
-        } catch {
-            print("Error requesting notification permission: \(error.localizedDescription)")
-            await MainActor.run {
-                self.isAuthorized = false
-            }
-        }
-    }
-    
-    func scheduleMotivationalNotification(for chore: Chore, statistics: Statistics) {
-        guard isAuthorized else {
-            print("Notifications not authorized")
-            return
-        }
-        
-        let content = UNMutableNotificationContent()
-        content.title = "Time to Get Moving!"
-        content.body = AIMotivationManager.shared.generateMessage(for: chore, statistics: statistics)
-        content.sound = .default
-        
-        // Schedule for 2 hours from now if chore is new, or 24 hours if it's been pending
-        let timeSinceCreation = Calendar.current.dateComponents([.hour], from: chore.createdDate, to: Date()).hour ?? 0
-        let delay: TimeInterval = timeSinceCreation < 24 ? 7200 : 86400 // 2 hours or 24 hours
-        
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: delay, repeats: false)
-        let request = UNNotificationRequest(identifier: chore.id.uuidString, content: content, trigger: trigger)
-        
-        center.add(request) { error in
-            if let error = error {
-                print("Error scheduling notification: \(error.localizedDescription)")
-            }
-        }
-    }
-    
-    func cancelNotification(for choreId: UUID) {
-        center.removePendingNotificationRequests(withIdentifiers: [choreId.uuidString])
-    }
 }
 
 struct ContentView: View {
     @State private var isWelcomeActive = true
     @State private var chores: [Chore] = []
-    @State private var categories: [Category] = []
-    @State private var statistics = Statistics()
-    @State private var achievements: [Achievement] = []
-    @StateObject private var cloudKit = CloudKitManager.shared
+    @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
-        Group {
-            if isWelcomeActive && chores.isEmpty {
-                WelcomeView(
-                    isWelcomeActive: $isWelcomeActive,
-                    chores: $chores,
-                    categories: $categories,
-                    statistics: $statistics
-                )
+        NavigationView {
+            if isWelcomeActive {
+                WelcomeView(chores: $chores, isWelcomeActive: $isWelcomeActive)
             } else {
-                HomeView(
-                    chores: $chores,
-                    categories: $categories,
-                    statistics: $statistics,
-                    achievements: $achievements
-                )
+                HomeView(chores: $chores)
             }
         }
+        .navigationViewStyle(StackNavigationViewStyle())
         .onAppear {
-            loadData()
+            loadChores()
+            
+            // Check if we should skip welcome screen
+            let hasSeenWelcome = UserDefaults.standard.bool(forKey: "hasSeenWelcome")
+            if hasSeenWelcome && !chores.isEmpty {
+                isWelcomeActive = false
+            }
         }
     }
     
-    private func loadData() {
-        // Load chores
-        if let data = UserDefaults.standard.data(forKey: "chores"),
-           let savedChores = try? JSONDecoder().decode([Chore].self, from: data) {
-            chores = savedChores
-            print("Loaded \(savedChores.count) chores")
-        }
-        
-        // Load categories
-        if let data = UserDefaults.standard.data(forKey: "categories"),
-           let savedCategories = try? JSONDecoder().decode([Category].self, from: data) {
-            categories = savedCategories
-            print("Loaded \(savedCategories.count) categories")
-        }
-        
-        // Load statistics
-        if let data = UserDefaults.standard.data(forKey: "statistics"),
-           let savedStats = try? JSONDecoder().decode(Statistics.self, from: data) {
-            statistics = savedStats
-            print("Loaded statistics")
-        }
-        
-        // Load achievements
-        if let data = UserDefaults.standard.data(forKey: "achievements"),
-           let savedAchievements = try? JSONDecoder().decode([Achievement].self, from: data) {
-            achievements = savedAchievements
-            print("Loaded \(savedAchievements.count) achievements")
-        }
-        
-        // Check if we should skip welcome screen
-        let hasSeenWelcome = UserDefaults.standard.bool(forKey: "hasSeenWelcome")
-        if hasSeenWelcome || !chores.isEmpty {
-            isWelcomeActive = false
-        }
-        
-        // Try to load from iCloud if available
-        if cloudKit.isAvailable {
-            Task {
-                do {
-                    let cloudChores = try await cloudKit.fetchChores()
-                    if !cloudChores.isEmpty {
-                        await MainActor.run {
-                            chores = cloudChores
-                            print("Loaded \(cloudChores.count) chores from iCloud")
-                        }
-                    }
-                } catch {
-                    print("Failed to load chores from iCloud: \(error.localizedDescription)")
-                }
+    private func loadChores() {
+        if let savedChores = UserDefaults.standard.data(forKey: "savedChores") {
+            do {
+                let decodedChores = try JSONDecoder().decode([Chore].self, from: savedChores)
+                self.chores = decodedChores
+                print("Loaded \(decodedChores.count) chores from UserDefaults")
+            } catch {
+                print("Failed to decode chores: \(error.localizedDescription)")
             }
+        } else {
+            print("No saved chores found in UserDefaults")
         }
     }
 }
 
 struct WelcomeView: View {
-    @Binding var isWelcomeActive: Bool
     @Binding var chores: [Chore]
-    @Binding var categories: [Category]
-    @Binding var statistics: Statistics
-    @State private var newChoreName = ""
-    @State private var showingAddChore = false
-    @StateObject private var notificationManager = NotificationManager.shared
+    @Binding var isWelcomeActive: Bool
+    @State private var newChore: String = ""
+    @Environment(\.colorScheme) var colorScheme
+    
+    let presetChores = [
+        "Wash the dishes",
+        "Clean the Windows",
+        "Mop the Floor",
+        "Clean your room"
+    ]
     
     var body: some View {
-        VStack(spacing: 30) {
-            // Header
-            VStack(spacing: 15) {
-                Text("Welcome to")
-                    .font(.title2)
-                    .foregroundColor(.gray)
-                
-                Text("HTasks")
-                    .font(.system(size: 50, weight: .bold))
-                    .foregroundColor(.blue)
-                
-                Text("Your Home Chores Manager")
-                    .font(.title3)
-                    .foregroundColor(.gray)
-            }
-            .padding(.top, 50)
+        VStack(spacing: 20) {
+            Text("Welcome to HTasks!")
+                .font(.system(size: 40, weight: .bold, design: .rounded))
+                .foregroundColor(colorScheme == .dark ? .white : .black)
             
-            // Add Chore Section
-            VStack(spacing: 20) {
-                Text("Let's start by adding your first chore")
-                    .font(.headline)
-                    .foregroundColor(.gray)
+            Text("Choose basic chores you want to do at home and get motivated!")
+                .font(.headline)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
+            
+            // Chore input field with modern styling
+            TextField("Type your own chore", text: $newChore)
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
+                )
+                .padding(.horizontal)
+                .foregroundColor(colorScheme == .dark ? .white : .black)
+            
+            Button(action: {
+                if !newChore.isEmpty {
+                    addChore(newChore)
+                    newChore = ""
+                }
+            }) {
+                HStack {
+                    Image(systemName: "plus.circle.fill")
+                    Text("Add Chore")
+                }
+                .fontWeight(.semibold)
+                .padding()
+                .frame(maxWidth: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(colorScheme == .dark ? Color.blue.opacity(0.7) : Color.blue)
+                )
+                .foregroundColor(colorScheme == .dark ? .white : .black)
+            }
+            .padding(.horizontal)
+            
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Presets:")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                    .padding(.leading)
                 
-                Button(action: {
-                    showingAddChore = true
-                }) {
-                    HStack {
-                        Image(systemName: "plus.circle.fill")
-                        Text("Add Your First Chore")
+                ScrollView {
+                    VStack(spacing: 16) {
+                        ForEach(presetChores, id: \.self) { preset in
+                            Button(action: {
+                                addChore(preset)
+                            }) {
+                                HStack {
+                                    Text(preset)
+                                        .font(.headline)
+                                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                                    Spacer()
+                                    Image(systemName: "plus.circle.fill")
+                                        .font(.title3)
+                                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                                }
+                                .padding()
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
+                                        .shadow(color: colorScheme == .dark ? Color.black.opacity(0.1) : Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
+                                )
+                                .padding(EdgeInsets(top: 2, leading: 4, bottom: 2, trailing: 4))
+                            }
+                        }
                     }
-                    .font(.headline)
-                    .foregroundColor(.white)
-                    .padding()
-                    .frame(maxWidth: .infinity)
-                    .background(Color.blue)
-                    .cornerRadius(15)
+                    .padding(.horizontal)
                 }
             }
-            .padding(.horizontal)
             
-            Spacer()
-            
-            // Continue Button
-            Button(action: {
-                isWelcomeActive = false
-                UserDefaults.standard.set(true, forKey: "hasSeenWelcome")
-            }) {
-                Text("Continue")
-                    .font(.headline)
-                    .foregroundColor(.white)
+            if !chores.isEmpty {
+                Button(action: {
+                    isWelcomeActive = false
+                    // Mark that user has seen welcome screen
+                    UserDefaults.standard.set(true, forKey: "hasSeenWelcome")
+                    UserDefaults.standard.synchronize()
+                }) {
+                    HStack {
+                        Text("Continue")
+                        Spacer()
+                        Image(systemName: "arrow.right")
+                    }
+                    .fontWeight(.semibold)
                     .padding()
                     .frame(maxWidth: .infinity)
-                    .background(Color.blue)
-                    .cornerRadius(15)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(colorScheme == .dark ? Color.green.opacity(0.7) : Color.green)
+                    )
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                }
+                .padding(.horizontal)
             }
-            .padding(.horizontal)
-            .padding(.bottom, 30)
+            
+            Spacer()
         }
+        .navigationBarHidden(true)
         .padding()
-        .sheet(isPresented: $showingAddChore) {
-            AddChoreView(
-                chores: $chores,
-                categories: $categories,
-                statistics: $statistics
+        .background(
+            LinearGradient(
+                gradient: Gradient(colors: colorScheme == .dark ? 
+                                  [Color.black, Color.blue.opacity(0.2)] : 
+                                  [Color.white, Color.blue.opacity(0.1)]),
+                startPoint: .top,
+                endPoint: .bottom
             )
-        }
-        .task {
-            await notificationManager.requestAuthorization()
+            .edgesIgnoringSafeArea(.all)
+        )
+    }
+    
+    private func addChore(_ title: String) {
+        let newChore = Chore(title: title)
+        chores.append(newChore)
+        saveChores()
+    }
+    
+    private func saveChores() {
+        do {
+            let encoded = try JSONEncoder().encode(chores)
+            UserDefaults.standard.set(encoded, forKey: "savedChores")
+            UserDefaults.standard.synchronize()
+            print("Successfully saved \(chores.count) chores from WelcomeView")
+        } catch {
+            print("Failed to encode chores: \(error.localizedDescription)")
         }
     }
 }
 
 struct HomeView: View {
     @Binding var chores: [Chore]
-    @Binding var categories: [Category]
-    @Binding var statistics: Statistics
-    @Binding var achievements: [Achievement]
-    @StateObject private var cloudKit = CloudKitManager.shared
-    @State private var showingAddChore = false
-    @State private var showingSettingsSheet = false
-    @State private var settings = UserSettings.load() // Load settings properly
-    @StateObject private var notificationManager = NotificationManager.shared
-    @State private var showingDeleteAlert = false
     @State private var choreToDelete: Chore?
-    @State private var syncError: Error?
-    @State private var showingSyncError = false
+    @State private var showingDeleteAlert = false
+    @State private var showingAddChoreSheet = false
+    @State private var showingSettingsSheet = false
+    @State private var settings = UserSettings()
+    @State private var newChoreTitle = ""
+    @State private var presentCategoryManagement = false
+    @State private var presentAnalytics = false
+    @State private var selectedCategoryId: UUID?
+    @State private var dueDate = Date()
+    @State private var showingDueDatePicker = false
+    @StateObject private var coreDataManager = CoreDataManager.shared
+    @Environment(\.colorScheme) var colorScheme
+    
+    var completedChoresCount: Int {
+        chores.filter { $0.isCompleted }.count
+    }
     
     var body: some View {
-        NavigationView {
-            List {
-                ForEach(chores.filter { !$0.isCompleted }) { chore in
-                    ChoreRow(chore: chore, category: categories.first(where: { $0.id == chore.categoryId }))
-                        .swipeActions(edge: .trailing) {
-                            Button(role: .destructive) {
+        ZStack {
+            VStack(spacing: 0) {
+                // VisionOS style header with completed chores count
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Number of chores done this week:")
+                        .font(.headline)
+                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
+                    
+                    HStack(alignment: .bottom, spacing: 8) {
+                        Text("\(completedChoresCount)")
+                            .font(.system(size: 60, weight: .bold, design: .rounded))
+                            .foregroundColor(colorScheme == .dark ? .white : .black)
+                        
+                        if completedChoresCount == 0 {
+                            Text("u lazy or sum?")
+                                .font(.system(size: 12))
+                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .black.opacity(0.6))
+                                .padding(.bottom, 12)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.gray.opacity(0.1))
+                )
+                .padding(.horizontal)
+                .padding(.top)
+                
+                // Chore list with VisionOS-style design
+                List {
+                    ForEach(chores) { chore in
+                        HStack {
+                            // Try to find category for this chore
+                            let category = getCategory(for: chore.categoryId)
+                            
+                            Text(chore.title)
+                                .font(.headline)
+                                .foregroundColor(
+                                    chore.isCompleted ? 
+                                        (colorScheme == .dark ? .white.opacity(0.5) : .black.opacity(0.5)) : 
+                                        (colorScheme == .dark ? .white : .black)
+                                )
+                                .strikethrough(chore.isCompleted)
+                            
+                            if let category = category {
+                                Circle()
+                                    .fill(Color(category.color ?? "blue"))
+                                    .frame(width: 8, height: 8)
+                                    .padding(.leading, 4)
+                            }
+                            
+                            Spacer()
+                            
+                            // Checkmark button
+                            Button(action: {
+                                toggleChoreCompletion(chore)
+                            }) {
+                                Image(systemName: chore.isCompleted ? "checkmark.circle.fill" : "circle")
+                                    .font(.title2)
+                                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                                    .padding(5)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(BorderlessButtonStyle())
+                            
+                            // Delete button
+                            Button(action: {
+                                choreToDelete = chore
                                 if settings.showDeleteConfirmation {
-                                    choreToDelete = chore
                                     showingDeleteAlert = true
                                 } else {
                                     deleteChore(chore)
                                 }
-                            } label: {
-                                Label("Delete", systemImage: "trash")
+                            }) {
+                                Image(systemName: "trash.fill")
+                                    .font(.title2)
+                                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                                    .padding(5)
+                                    .contentShape(Rectangle())
                             }
-                            
-                            Button {
-                                completeChore(chore)
-                            } label: {
-                                Label("Complete", systemImage: "checkmark")
-                            }
-                            .tint(.green)
+                            .buttonStyle(BorderlessButtonStyle())
                         }
-                }
-            }
-            .navigationTitle("HTasks")
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        showingSettingsSheet = true
-                    } label: {
-                        Image(systemName: "gear")
+                        .padding(.vertical, 8)
+                        .listRowBackground(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
+                                .padding(EdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8))
+                        )
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                     }
                 }
-                
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        showingAddChore = true
-                    } label: {
+                .listStyle(PlainListStyle())
+                .background(Color.clear)
+                .alert(isPresented: $showingDeleteAlert) {
+                    Alert(
+                        title: Text("Are you sure you want to delete this chore?"),
+                        message: Text(settings.deleteConfirmationText),
+                        primaryButton: .destructive(Text("Delete").foregroundColor(colorScheme == .dark ? .white : .black)) {
+                            if let choreToDelete = choreToDelete {
+                                deleteChore(choreToDelete)
+                            }
+                        },
+                        secondaryButton: .cancel(Text("No").foregroundColor(colorScheme == .dark ? .white : .black))
+                    )
+                }
+            }
+            
+            // Floating add button
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    Button(action: {
+                        showingAddChoreSheet = true
+                    }) {
                         Image(systemName: "plus")
+                            .font(.title)
+                            .fontWeight(.bold)
+                            .foregroundColor(colorScheme == .dark ? .black : .white)
+                            .frame(width: 60, height: 60)
+                            .background(
+                                Circle()
+                                    .fill(colorScheme == .dark ? .white : .black)
+                                    .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
+                            )
                     }
+                    .padding(.trailing, 20)
+                    .padding(.bottom, 20)
                 }
             }
-            .sheet(isPresented: $showingAddChore) {
-                AddChoreView(
-                    chores: $chores,
-                    categories: $categories,
-                    statistics: $statistics
-                )
+        }
+        .navigationTitle("My Chores")
+        .navigationBarItems(trailing: 
+            Button(action: {
+                showingSettingsSheet = true
+            }) {
+                Image(systemName: "gear")
+                    .font(.title2)
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                    .padding(8)
+                    .contentShape(Rectangle())
             }
-            .sheet(isPresented: $showingSettingsSheet) {
-                SettingsView(
-                    settings: $settings,
-                    chores: $chores,
-                    categories: $categories,
-                    statistics: $statistics,
-                    achievements: $achievements
-                )
+        )
+        .background(
+            LinearGradient(
+                gradient: Gradient(colors: colorScheme == .dark ? 
+                                  [Color.black, Color.blue.opacity(0.2)] : 
+                                  [Color.white, Color.blue.opacity(0.1)]),
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .edgesIgnoringSafeArea(.all)
+        )
+        .sheet(isPresented: $showingAddChoreSheet) {
+            // Add chore sheet
+            NavigationView {
+                VStack(spacing: 20) {
+                    Form {
+                        Section(header: Text("Chore Details")) {
+                            TextField("Chore name", text: $newChoreTitle)
+                                .padding(.vertical, 8)
+                            
+                            // Category Picker
+                            HStack {
+                                Text("Category")
+                                Spacer()
+                                NavigationLink {
+                                    CategoryPickerView(selectedCategoryId: $selectedCategoryId, coreDataManager: CoreDataManager.shared)
+                                } label: {
+                                    HStack {
+                                        if let selectedCategory = getSelectedCategory() {
+                                            Circle()
+                                                .fill(Color(selectedCategory.color ?? "blue"))
+                                                .frame(width: 12, height: 12)
+                                            Text(selectedCategory.name ?? "")
+                                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
+                                        } else {
+                                            Text("None")
+                                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
+                                        }
+                                    }
+                                }
+                            }
+                            .padding(.vertical, 8)
+                            
+                            // Due Date
+                            Toggle("Set Due Date", isOn: $showingDueDatePicker)
+                                .padding(.vertical, 8)
+                            
+                            if showingDueDatePicker {
+                                DatePicker("Due Date", selection: $dueDate, displayedComponents: [.date])
+                                    .datePickerStyle(GraphicalDatePickerStyle())
+                            }
+                        }
+                    }
+                    .scrollContentBackground(.hidden)
+                    .background(colorScheme == .dark ? Color.black : Color.white)
+
+                    HStack(spacing: 15) {
+                        Button(action: {
+                            showingAddChoreSheet = false
+                        }) {
+                            Text("Cancel")
+                                .fontWeight(.medium)
+                                .padding()
+                                .frame(maxWidth: .infinity)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .stroke(colorScheme == .dark ? Color.white.opacity(0.3) : Color.black.opacity(0.3), lineWidth: 1)
+                                )
+                        }
+                        
+                        Button(action: {
+                            if !newChoreTitle.isEmpty {
+                                let newChore = Chore(
+                                    title: newChoreTitle,
+                                    categoryId: selectedCategoryId,
+                                    createdDate: Date(),
+                                    dueDate: showingDueDatePicker ? dueDate : nil
+                                )
+                                chores.append(newChore)
+                                saveChores()
+                                newChoreTitle = ""
+                                selectedCategoryId = nil
+                                dueDate = Date()
+                                showingDueDatePicker = false
+                                showingAddChoreSheet = false
+                            }
+                        }) {
+                            Text("Add")
+                                .fontWeight(.medium)
+                                .padding()
+                                .frame(maxWidth: .infinity)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .fill(colorScheme == .dark ? Color.blue.opacity(0.7) : Color.blue)
+                                )
+                                .foregroundColor(colorScheme == .dark ? .white : .black)
+                        }
+                        .disabled(newChoreTitle.isEmpty)
+                    }
+                    .padding(.horizontal)
+                    .padding(.bottom)
+                }
+                .navigationTitle("Add New Chore")
+                .navigationBarHidden(true)
             }
-            .alert(settings.deleteConfirmationText, isPresented: $showingDeleteAlert) {
-                Button("Cancel", role: .cancel) { }
-                Button("Delete", role: .destructive) {
-                    if let chore = choreToDelete {
-                        deleteChore(chore)
+            .onAppear {
+                resetForm()
+            }
+        }
+        .sheet(isPresented: $showingSettingsSheet) {
+            // Settings sheet
+            VStack(spacing: 24) {
+                Text("Settings")
+                    .font(.title)
+                    .fontWeight(.bold)
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                    .padding(.top, 20)
+                
+                VStack(alignment: .leading, spacing: 20) {
+                    Text("Customization")
+                        .font(.headline)
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                    
+                    Toggle("Show Confirmation when clicking delete", isOn: $settings.showDeleteConfirmation)
+                        .onChange(of: settings.showDeleteConfirmation) { _, newValue in
+                            saveSettings()
+                        }
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                    
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Change the Confirmation text when clicking delete")
+                            .foregroundColor(settings.showDeleteConfirmation ? 
+                                           (colorScheme == .dark ? .white : .black) : 
+                                           (colorScheme == .dark ? .white.opacity(0.4) : .black.opacity(0.4)))
+                        
+                        TextField("Confirmation message", text: $settings.deleteConfirmationText)
+                            .padding()
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
+                                    .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
+                            )
+                            .disabled(!settings.showDeleteConfirmation)
+                            .opacity(settings.showDeleteConfirmation ? 1.0 : 0.4)
+                            .onChange(of: settings.deleteConfirmationText) { _, newValue in
+                                saveSettings()
+                            }
                     }
                 }
+                .padding(.horizontal)
+                
+                // Add navigation buttons to new screens
+                VStack(alignment: .leading, spacing: 20) {
+                    Text("Organization")
+                        .font(.headline)
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                    
+                    // Categories Button
+                    Button(action: {
+                        showingSettingsSheet = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            presentCategoryManagement = true
+                        }
+                    }) {
+                        HStack {
+                            Image(systemName: "tag.fill")
+                                .foregroundColor(colorScheme == .dark ? .white : .black)
+                            
+                            Text("Manage Categories")
+                                .foregroundColor(colorScheme == .dark ? .white : .black)
+                            
+                            Spacer()
+                            
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .black.opacity(0.6))
+                        }
+                        .padding()
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
+                                .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
+                        )
+                    }
+                    
+                    // Analytics Button
+                    Button(action: {
+                        showingSettingsSheet = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            presentAnalytics = true
+                        }
+                    }) {
+                        HStack {
+                            Image(systemName: "chart.bar.fill")
+                                .foregroundColor(colorScheme == .dark ? .white : .black)
+                            
+                            Text("Analytics & Achievements")
+                                .foregroundColor(colorScheme == .dark ? .white : .black)
+                            
+                            Spacer()
+                            
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .black.opacity(0.6))
+                        }
+                        .padding()
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
+                                .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
+                        )
+                    }
+                }
+                .padding(.horizontal)
+                
+                Spacer()
+                
+                Button(action: {
+                    showingSettingsSheet = false
+                }) {
+                    Text("Done")
+                        .fontWeight(.medium)
+                        .padding()
+                        .frame(maxWidth: .infinity)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(colorScheme == .dark ? Color.blue.opacity(0.7) : Color.blue)
+                        )
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                }
+                .padding()
             }
-            .alert("Sync Error", isPresented: $showingSyncError) {
-                Button("OK", role: .cancel) { }
-            } message: {
-                Text(syncError?.localizedDescription ?? "Unknown error occurred while syncing")
-            }
+            .background(
+                colorScheme == .dark ? Color.black : Color.white
+            )
+            .presentationDetents([.medium])
+        }
+        .sheet(isPresented: $presentCategoryManagement) {
+            CategoryManagementView()
+        }
+        .sheet(isPresented: $presentAnalytics) {
+            AnalyticsView()
+        }
+        .onAppear {
+            loadSettings()
         }
     }
     
-    private func completeChore(_ chore: Chore) {
+    private func toggleChoreCompletion(_ chore: Chore) {
         if let index = chores.firstIndex(where: { $0.id == chore.id }) {
-            var updatedChore = chores[index]
-            updatedChore.isCompleted = true
-            chores[index] = updatedChore
-            statistics.updateForChoreCompletion(chore: updatedChore)
-            
+            chores[index].isCompleted.toggle()
             saveChores()
-            saveStatistics()
-            
-            // Cancel notification for completed chore
-            notificationManager.cancelNotification(for: chore.id)
         }
     }
     
@@ -722,509 +666,141 @@ struct HomeView: View {
         if let index = chores.firstIndex(where: { $0.id == chore.id }) {
             chores.remove(at: index)
             saveChores()
-            
-            // Cancel notification for deleted chore
-            notificationManager.cancelNotification(for: chore.id)
         }
     }
     
     private func saveChores() {
-        if let encoded = try? JSONEncoder().encode(chores) {
-            UserDefaults.standard.set(encoded, forKey: "chores")
+        do {
+            let encoded = try JSONEncoder().encode(chores)
+            UserDefaults.standard.set(encoded, forKey: "savedChores")
             UserDefaults.standard.synchronize()
-            
-            if cloudKit.isAvailable {
-                Task {
-                    do {
-                        try await cloudKit.syncChores(chores)
-                    } catch {
-                        DispatchQueue.main.async {
-                            syncError = error
-                            showingSyncError = true
-                        }
-                    }
-                }
-            }
+            print("Successfully saved \(chores.count) chores from HomeView")
+        } catch {
+            print("Failed to encode chores: \(error.localizedDescription)")
         }
     }
     
-    private func saveStatistics() {
-        if let encoded = try? JSONEncoder().encode(statistics) {
-            UserDefaults.standard.set(encoded, forKey: "statistics")
-            UserDefaults.standard.synchronize()
-            
-            if cloudKit.isAvailable {
-                Task {
-                    do {
-                        try await cloudKit.syncStatistics(statistics)
-                    } catch {
-                        DispatchQueue.main.async {
-                            syncError = error
-                            showingSyncError = true
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-struct CategoryManagementView: View {
-    @Binding var categories: [Category]
-    @State private var newCategoryName = ""
-    @State private var selectedColor = "blue"
-    @Environment(\.dismiss) var dismiss
-    @StateObject private var cloudKit = CloudKitManager.shared
-    @State private var syncError: Error?
-    @State private var showingSyncError = false
-    
-    let colors = ["blue", "red", "green", "orange", "purple", "pink"]
-    
-    var body: some View {
-        NavigationView {
-            List {
-                Section(header: Text("Add New Category")) {
-                    TextField("Category Name", text: $newCategoryName)
-                    
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 15) {
-                            ForEach(colors, id: \.self) { color in
-                                Circle()
-                                    .fill(Color(color))
-                                    .frame(width: 30, height: 30)
-                                    .overlay(
-                                        Circle()
-                                            .stroke(Color.primary, lineWidth: selectedColor == color ? 2 : 0)
-                                    )
-                                    .onTapGesture {
-                                        selectedColor = color
-                                    }
-                            }
-                        }
-                        .padding(.vertical, 8)
-                    }
-                    
-                    Button(action: addCategory) {
-                        Text("Add Category")
-                            .frame(maxWidth: .infinity)
-                            .foregroundColor(.white)
-                    }
-                    .listRowBackground(Color.blue)
-                    .disabled(newCategoryName.isEmpty)
-                }
-                
-                Section(header: Text("Your Categories")) {
-                    ForEach(categories) { category in
-                        HStack {
-                            Circle()
-                                .fill(Color(category.color))
-                                .frame(width: 20, height: 20)
-                            Text(category.name)
-                        }
-                    }
-                    .onDelete(perform: deleteCategories)
-                }
-            }
-            .navigationTitle("Categories")
-            .navigationBarItems(trailing: Button("Done") { dismiss() })
-            .alert("Sync Error", isPresented: $showingSyncError) {
-                Button("OK", role: .cancel) { }
-            } message: {
-                Text(syncError?.localizedDescription ?? "Unknown error occurred while syncing")
-            }
-        }
-    }
-    
-    private func addCategory() {
-        let newCategory = Category(name: newCategoryName, color: selectedColor)
-        categories.append(newCategory)
-        newCategoryName = ""
-        saveCategories()
-    }
-    
-    private func deleteCategories(at offsets: IndexSet) {
-        categories.remove(atOffsets: offsets)
-        saveCategories()
-    }
-    
-    private func saveCategories() {
-        if let encoded = try? JSONEncoder().encode(categories) {
-            UserDefaults.standard.set(encoded, forKey: "categories")
-            UserDefaults.standard.synchronize()
-            
-            if cloudKit.isAvailable {
-                Task {
-                    do {
-                        try await cloudKit.syncCategories(categories)
-                    } catch {
-                        DispatchQueue.main.async {
-                            syncError = error
-                            showingSyncError = true
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-struct CategoryButton: View {
-    let title: String
-    var color: Color = .blue
-    let isSelected: Bool
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.subheadline)
-                .fontWeight(.medium)
-                .foregroundColor(isSelected ? .white : .primary)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(
-                    RoundedRectangle(cornerRadius: 20)
-                        .fill(isSelected ? color : color.opacity(0.1))
-                )
-        }
-    }
-}
-
-struct AddChoreView: View {
-    @Binding var chores: [Chore]
-    @Binding var categories: [Category]
-    @Binding var statistics: Statistics
-    @StateObject private var notificationManager = NotificationManager.shared
-    @StateObject private var cloudKit = CloudKitManager.shared
-    @Environment(\.dismiss) var dismiss
-    @State private var newChoreTitle = ""
-    @State private var selectedCategoryId: UUID?
-    @State private var dueDate = Date()
-    @State private var showingDatePicker = false
-    @State private var syncError: Error?
-    @State private var showingSyncError = false
-    @State private var showingError = false
-    @State private var errorMessage = ""
-    
-    var body: some View {
-        NavigationView {
-            Form {
-                Section(header: Text("Chore Details")) {
-                    TextField("Chore name", text: $newChoreTitle)
-                    
-                    if !categories.isEmpty {
-                        Picker("Category", selection: $selectedCategoryId) {
-                            Text("No Category").tag(Optional<UUID>.none)
-                            ForEach(categories) { category in
-                                HStack {
-                                    Circle()
-                                        .fill(Color(category.color))
-                                        .frame(width: 12, height: 12)
-                                    Text(category.name)
-                                }
-                                .tag(Optional(category.id))
-                            }
-                        }
-                    }
-                    
-                    Toggle("Set Due Date", isOn: $showingDatePicker)
-                    
-                    if showingDatePicker {
-                        DatePicker(
-                            "Due Date",
-                            selection: $dueDate,
-                            displayedComponents: [.date]
-                        )
-                    }
-                }
-            }
-            .navigationTitle("Add New Chore")
-            .navigationBarItems(
-                leading: Button("Cancel") {
-                    dismiss()
-                },
-                trailing: Button("Add") {
-                    Task {
-                        await addChore()
-                    }
-                }
-                .disabled(newChoreTitle.isEmpty)
-            )
-            .alert("Error", isPresented: $showingError) {
-                Button("OK", role: .cancel) { }
-            } message: {
-                Text(errorMessage)
-            }
-            .alert("Sync Error", isPresented: $showingSyncError) {
-                Button("OK", role: .cancel) { }
-            } message: {
-                Text(syncError?.localizedDescription ?? "Unknown error occurred while syncing")
-            }
-        }
-    }
-    
-    private func addChore() async {
-        guard !newChoreTitle.isEmpty else {
-            errorMessage = "Please enter a chore name"
-            showingError = true
-            return
-        }
-        
-        let newChore = Chore(
-            title: newChoreTitle.trimmingCharacters(in: .whitespacesAndNewlines),
-            isCompleted: false,
-            categoryId: selectedCategoryId,
-            createdDate: showingDatePicker ? dueDate : Date()
-        )
-        
-        await MainActor.run {
-            chores.append(newChore)
-        }
-        
-        // Save to UserDefaults
-        if let encoded = try? JSONEncoder().encode(chores) {
-            UserDefaults.standard.set(encoded, forKey: "chores")
-            UserDefaults.standard.synchronize()
-            
-            // Schedule notification
-            notificationManager.scheduleMotivationalNotification(for: newChore, statistics: statistics)
-            
-            // Sync to iCloud if available
-            if cloudKit.isAvailable {
-                do {
-                    try await cloudKit.syncChores(chores)
-                } catch {
-                    await MainActor.run {
-                        syncError = error
-                        showingSyncError = true
-                        return
-                    }
-                }
-            }
-            
-            await MainActor.run {
-                dismiss()
+    private func loadSettings() {
+        if let savedSettings = UserDefaults.standard.data(forKey: "userSettings") {
+            do {
+                let decodedSettings = try JSONDecoder().decode(UserSettings.self, from: savedSettings)
+                self.settings = decodedSettings
+                print("Loaded user settings from UserDefaults")
+            } catch {
+                print("Failed to decode settings: \(error.localizedDescription)")
             }
         } else {
-            await MainActor.run {
-                errorMessage = "Failed to save chore"
-                showingError = true
-            }
+            // Use default settings already initialized
+            print("No saved settings found in UserDefaults, using defaults")
         }
+    }
+    
+    private func saveSettings() {
+        if let encoded = try? JSONEncoder().encode(settings) {
+            UserDefaults.standard.set(encoded, forKey: "userSettings")
+            UserDefaults.standard.synchronize()
+            print("Successfully saved settings")
+        }
+    }
+    
+    private func resetForm() {
+        newChoreTitle = ""
+        selectedCategoryId = nil
+        dueDate = Date()
+        showingDueDatePicker = false
+    }
+    
+    private func getSelectedCategory() -> CategoryEntity? {
+        guard let categoryId = selectedCategoryId else { return nil }
+        
+        let categories = coreDataManager.fetchCategories()
+        return categories.first { $0.id?.uuidString == categoryId.uuidString }
+    }
+    
+    private func getCategory(for categoryId: UUID?) -> CategoryEntity? {
+        guard let categoryId = categoryId else { return nil }
+        
+        let categories = coreDataManager.fetchCategories()
+        return categories.first { $0.id?.uuidString == categoryId.uuidString }
     }
 }
 
-struct StatisticsView: View {
-    let statistics: Statistics
-    let categories: [Category]
+struct CategoryPickerView: View {
+    @Binding var selectedCategoryId: UUID?
+    @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) var colorScheme
+    let coreDataManager: CoreDataManager
+    @State private var categories: [CategoryEntity] = []
     
     var body: some View {
         List {
-            Section(header: Text("Overall Progress")) {
-                StatRow(title: "Total Completed", value: "\(statistics.totalCompleted)")
-                StatRow(title: "Current Streak", value: "\(statistics.currentStreak) days")
-                StatRow(title: "Best Streak", value: "\(statistics.bestStreak) days")
-            }
-            
-            Section(header: Text("Category Progress")) {
-                ForEach(categories) { category in
-                    StatRow(
-                        title: category.name,
-                        value: "\(statistics.categoryCompletions[category.id] ?? 0)"
-                    )
-                }
-            }
-        }
-        .navigationTitle("Statistics")
-    }
-}
-
-struct AchievementView: View {
-    let achievements: [Achievement]
-    
-    var body: some View {
-        List {
-            ForEach(achievements) { achievement in
+            Button {
+                selectedCategoryId = nil
+                dismiss()
+            } label: {
                 HStack {
-                    Image(systemName: achievement.icon)
-                        .font(.title2)
-                        .foregroundColor(achievement.isUnlocked ? .yellow : .gray)
-                        .frame(width: 40)
-                    
-                    VStack(alignment: .leading) {
-                        Text(achievement.title)
-                            .font(.headline)
-                        Text(achievement.description)
-                            .font(.subheadline)
-                            .foregroundColor(.gray)
-                    }
+                    Text("No Category")
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
                     
                     Spacer()
                     
-                    if achievement.isUnlocked {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.green)
-                    }
-                }
-                .padding(.vertical, 4)
-            }
-        }
-        .navigationTitle("Achievements")
-    }
-}
-
-struct StatRow: View {
-    let title: String
-    let value: String
-    
-    var body: some View {
-        HStack {
-            Text(title)
-            Spacer()
-            Text(value)
-                .foregroundColor(.gray)
-        }
-    }
-}
-
-struct SettingsView: View {
-    @Binding var settings: UserSettings
-    @Binding var chores: [Chore]
-    @Binding var categories: [Category]
-    @Binding var statistics: Statistics
-    @Binding var achievements: [Achievement]
-    @Environment(\.dismiss) var dismiss
-    @State private var showingBackupSuccess = false
-    @State private var showingBackupError = false
-    @State private var backupErrorMessage = ""
-    @State private var isBackingUp = false
-    @StateObject private var cloudKit = CloudKitManager.shared
-    
-    var body: some View {
-        NavigationView {
-            Form {
-                Section(header: Text("Delete Confirmation")) {
-                    Toggle("Show confirmation when deleting", isOn: $settings.showDeleteConfirmation)
-                    
-                    if settings.showDeleteConfirmation {
-                        TextField("Delete confirmation message", text: $settings.deleteConfirmationText)
-                    }
-                }
-                .onChange(of: settings.showDeleteConfirmation) { _, _ in
-                    settings.save()
-                }
-                .onChange(of: settings.deleteConfirmationText) { _, _ in
-                    settings.save()
-                }
-                
-                Section(header: Text("iCloud Backup")) {
-                    Button(action: {
-                        Task {
-                            await performBackup()
-                        }
-                    }) {
-                        HStack {
-                            Text("Backup Now")
-                            Spacer()
-                            if isBackingUp {
-                                ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle())
-                            } else {
-                                Image(systemName: "arrow.triangle.2.circlepath")
-                            }
-                        }
-                    }
-                    .disabled(isBackingUp || !cloudKit.isAvailable)
-                    
-                    Toggle("Automatic iCloud Backup", isOn: $settings.autoBackupToiCloud)
-                        .onChange(of: settings.autoBackupToiCloud) { _, _ in
-                            settings.save()
-                        }
-                    
-                    if let lastSync = cloudKit.lastSyncDate {
-                        Text("Last backup: \(lastSync.formatted(.relative(presentation: .named)))")
-                            .font(.caption)
-                            .foregroundColor(.gray)
-                    }
-                }
-                
-                if !cloudKit.isAvailable {
-                    Section {
-                        Text("iCloud is not available. Please check your iCloud settings.")
-                            .foregroundColor(.red)
+                    if selectedCategoryId == nil {
+                        Image(systemName: "checkmark")
+                            .foregroundColor(.blue)
                     }
                 }
             }
-            .navigationTitle("Settings")
-            .navigationBarItems(trailing: Button("Done") { dismiss() })
-            .alert("Backup Successful", isPresented: $showingBackupSuccess) {
-                Button("OK", role: .cancel) { }
-            } message: {
-                Text("Your data has been successfully backed up to iCloud.")
-            }
-            .alert("Backup Failed", isPresented: $showingBackupError) {
-                Button("OK", role: .cancel) { }
-            } message: {
-                Text(backupErrorMessage)
-            }
-        }
-    }
-    
-    private func performBackup() async {
-        guard cloudKit.isAvailable else {
-            await MainActor.run {
-                backupErrorMessage = "iCloud is not available"
-                showingBackupError = true
-            }
-            return
-        }
-        
-        await MainActor.run {
-            isBackingUp = true
-        }
-        
-        do {
-            try await cloudKit.syncChores(chores)
-            try await cloudKit.syncCategories(categories)
-            try await cloudKit.syncStatistics(statistics)
-            try await cloudKit.syncAchievements(achievements)
+            .listRowBackground(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
+                    .padding(EdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8))
+            )
             
-            await MainActor.run {
-                isBackingUp = false
-                showingBackupSuccess = true
-            }
-        } catch {
-            await MainActor.run {
-                isBackingUp = false
-                backupErrorMessage = error.localizedDescription
-                showingBackupError = true
+            ForEach(categories, id: \.id) { category in
+                Button {
+                    selectedCategoryId = category.id as UUID?
+                    dismiss()
+                } label: {
+                    HStack {
+                        Circle()
+                            .fill(Color(category.color ?? "blue"))
+                            .frame(width: 16, height: 16)
+                        
+                        Text(category.name ?? "")
+                            .foregroundColor(colorScheme == .dark ? .white : .black)
+                        
+                        Spacer()
+                        
+                        if let selectedId = selectedCategoryId, selectedId == category.id as UUID? {
+                            Image(systemName: "checkmark")
+                                .foregroundColor(.blue)
+                        }
+                    }
+                }
+                .listRowBackground(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
+                        .padding(EdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8))
+                )
             }
         }
+        .listStyle(PlainListStyle())
+        .navigationTitle("Select Category")
+        .onAppear {
+            loadCategories()
+        }
+    }
+    
+    private func loadCategories() {
+        categories = coreDataManager.fetchCategories()
     }
 }
 
-struct ChoreRow: View {
-    let chore: Chore
-    let category: Category?
-    
-    var body: some View {
-        HStack {
-            VStack(alignment: .leading) {
-                Text(chore.title)
-                    .font(.headline)
-                if let category = category {
-                    Text(category.name)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
-            Spacer()
-            if chore.isCompleted {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundColor(.green)
-            }
-        }
-        .padding(.vertical, 8)
+extension Category {
+    init(from entity: CategoryEntity) {
+        self.id = entity.id ?? UUID()
+        self.name = entity.name ?? "Unnamed"
+        self.color = entity.color ?? "blue"
     }
 }
 
