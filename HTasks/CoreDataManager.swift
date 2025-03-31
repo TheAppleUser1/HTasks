@@ -13,6 +13,13 @@ class CoreDataManager: ObservableObject {
     
     private init() {
         container = NSPersistentContainer(name: "HTasksModel")
+        
+        // Configure for app groups to share with widget
+        if let storeURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.yourdomain.HTasks")?.appendingPathComponent("HTasksModel.sqlite") {
+            let storeDescription = NSPersistentStoreDescription(url: storeURL)
+            container.persistentStoreDescriptions = [storeDescription]
+        }
+        
         container.loadPersistentStores { description, error in
             if let error = error {
                 print("Failed to load Core Data: \(error.localizedDescription)")

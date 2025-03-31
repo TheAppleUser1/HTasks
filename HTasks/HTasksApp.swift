@@ -18,15 +18,14 @@ struct HTasksApp: App {
         // Setup
         UINavigationBar.appearance().tintColor = .label
         
-        // Request notification permissions
-        Task {
-            _ = await notificationManager.requestAuthorization()
-        }
-        
         // Setup CoreData
         coreDataManager.setupDefaultData()
         
         // Reload widgets
+        reloadWidgets()
+    }
+    
+    func reloadWidgets() {
         WidgetCenter.shared.reloadAllTimelines()
     }
     
@@ -34,8 +33,16 @@ struct HTasksApp: App {
         WindowGroup {
             ContentView()
                 .onAppear {
+                    // Request notification permissions
+                    Task {
+                        _ = await notificationManager.requestAuthorization()
+                    }
+                    
                     // Force-unwrap is safe here as we're not actually using the result
                     _ = coreDataManager.viewContext
+                }
+                .onChange(of: coreDataManager.viewContext.hasChanges) { _, _ in
+                    reloadWidgets()
                 }
         }
     }
