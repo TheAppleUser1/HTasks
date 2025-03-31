@@ -97,6 +97,7 @@ struct WelcomeView: View {
     @Binding var isWelcomeActive: Bool
     @State private var newChore: String = ""
     @Environment(\.colorScheme) var colorScheme
+    @StateObject private var coreDataManager = CoreDataManager.shared
     
     let presetChores = [
         "Wash the dishes",
@@ -225,7 +226,13 @@ struct WelcomeView: View {
     }
     
     private func addChore(_ title: String) {
-        let newChore = Chore(title: title)
+        let newChore = Chore(
+            title: title,
+            isCompleted: false,
+            categoryId: nil,
+            createdDate: Date(),
+            dueDate: nil
+        )
         chores.append(newChore)
         saveChores()
     }
@@ -236,31 +243,19 @@ struct WelcomeView: View {
             let encoded = try JSONEncoder().encode(chores)
             UserDefaults.standard.set(encoded, forKey: "savedChores")
             
-            // Create detailed chore objects for the widget including categories and due dates
+            // For the widget, create simplified chore objects without categories since the welcome view
+            // doesn't have category information yet
             let widgetChores = chores.map { chore -> [String: Any] in
-                var choreDict: [String: Any] = [
+                [
                     "id": chore.id.uuidString,
                     "title": chore.title,
                     "isCompleted": chore.isCompleted,
+                    "categoryId": nil,
+                    "categoryName": nil,
+                    "categoryColor": nil,
+                    "dueDate": nil,
                     "createdDate": chore.createdDate
                 ]
-                
-                // Add category information if available
-                if let categoryId = chore.categoryId {
-                    choreDict["categoryId"] = categoryId.uuidString
-                    
-                    if let category = getCategory(for: categoryId) {
-                        choreDict["categoryName"] = category.name
-                        choreDict["categoryColor"] = category.color
-                    }
-                }
-                
-                // Add due date if available
-                if let dueDate = chore.dueDate {
-                    choreDict["dueDate"] = dueDate
-                }
-                
-                return choreDict
             }
             
             // Save to the shared App Group container for widget access
@@ -277,13 +272,6 @@ struct WelcomeView: View {
         } catch {
             print("Failed to save chores: \(error)")
         }
-    }
-    
-    private func getCategory(for categoryId: UUID?) -> CategoryEntity? {
-        guard let categoryId = categoryId else { return nil }
-        
-        let categories = coreDataManager.fetchCategories()
-        return categories.first { $0.id?.uuidString == categoryId.uuidString }
     }
 }
 
