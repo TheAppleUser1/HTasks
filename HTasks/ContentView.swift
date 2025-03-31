@@ -461,6 +461,7 @@ struct WelcomeView: View {
     @Binding var statistics: Statistics
     @State private var newChoreName = ""
     @State private var showingAddChore = false
+    @StateObject private var notificationManager = NotificationManager.shared
     
     var body: some View {
         VStack(spacing: 30) {
@@ -526,9 +527,11 @@ struct WelcomeView: View {
             AddChoreView(
                 chores: $chores,
                 categories: $categories,
-                statistics: $statistics,
-                notificationManager: NotificationManager()
+                statistics: $statistics
             )
+        }
+        .onAppear {
+            notificationManager.requestAuthorization()
         }
     }
 }
@@ -679,8 +682,7 @@ struct HomeView: View {
                 AddChoreView(
                     chores: $chores,
                     categories: $categories,
-                    statistics: $statistics,
-                    notificationManager: NotificationManager()
+                    statistics: $statistics
                 )
             }
             .sheet(isPresented: $showingSettingsSheet) {
@@ -834,12 +836,15 @@ struct AddChoreView: View {
     @Binding var chores: [Chore]
     @Binding var categories: [Category]
     @Binding var statistics: Statistics
-    let notificationManager: NotificationManager
+    @StateObject private var notificationManager = NotificationManager.shared
+    @StateObject private var cloudKit = CloudKitManager.shared
     @Environment(\.dismiss) var dismiss
     @State private var newChoreTitle = ""
     @State private var selectedCategoryId: UUID?
     @State private var dueDate: Date?
     @State private var showingDatePicker = false
+    @State private var syncError: Error?
+    @State private var showingSyncError = false
     
     var body: some View {
         NavigationView {
@@ -880,27 +885,49 @@ struct AddChoreView: View {
                     dismiss()
                 },
                 trailing: Button("Add") {
-                    let newChore = Chore(
-                        title: newChoreTitle,
-                        isCompleted: false,
-                        categoryId: selectedCategoryId,
-                        createdDate: showingDatePicker ? dueDate ?? Date() : Date()
-                    )
-                    chores.append(newChore)
-                    saveChores()
-                    notificationManager.scheduleMotivationalNotification(for: newChore, statistics: statistics)
-                    newChoreTitle = ""
-                    dismiss()
+                    addChore()
                 }
                 .disabled(newChoreTitle.isEmpty)
             )
+            .alert("Sync Error", isPresented: $showingSyncError) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(syncError?.localizedDescription ?? "Unknown error occurred while syncing")
+            }
         }
+    }
+    
+    private func addChore() {
+        let newChore = Chore(
+            title: newChoreTitle,
+            isCompleted: false,
+            categoryId: selectedCategoryId,
+            createdDate: showingDatePicker ? dueDate ?? Date() : Date()
+        )
+        chores.append(newChore)
+        saveChores()
+        notificationManager.scheduleMotivationalNotification(for: newChore, statistics: statistics)
+        newChoreTitle = ""
+        dismiss()
     }
     
     private func saveChores() {
         if let encoded = try? JSONEncoder().encode(chores) {
             UserDefaults.standard.set(encoded, forKey: "chores")
             UserDefaults.standard.synchronize()
+            
+            if cloudKit.isAvailable {
+                Task {
+                    do {
+                        try await cloudKit.syncChores(chores)
+                    } catch {
+                        DispatchQueue.main.async {
+                            syncError = error
+                            showingSyncError = true
+                        }
+                    }
+                }
+            }
         }
     }
 }
