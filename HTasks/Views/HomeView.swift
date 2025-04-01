@@ -79,51 +79,6 @@ struct HomeView: View {
     }
 }
 
-struct TaskRow: View {
-    let task: TaskEntity
-    let onToggle: (TaskEntity) -> Void
-    let onEdit: () -> Void
-    let onDelete: () -> Void
-    
-    var body: some View {
-        HStack {
-            Button(action: {
-                task.isCompleted.toggle()
-                onToggle(task)
-            }) {
-                Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
-                    .foregroundColor(task.isCompleted ? .green : .gray)
-            }
-            
-            VStack(alignment: .leading) {
-                Text(task.title ?? "")
-                    .strikethrough(task.isCompleted)
-                
-                if let dueDate = task.dueDate {
-                    Text(dueDate, style: .date)
-                        .font(.caption)
-                        .foregroundColor(.gray)
-                }
-            }
-            
-            Spacer()
-            
-            Menu {
-                Button(action: onEdit) {
-                    Label("Edit", systemImage: "pencil")
-                }
-                
-                Button(role: .destructive, action: onDelete) {
-                    Label("Delete", systemImage: "trash")
-                }
-            } label: {
-                Image(systemName: "ellipsis.circle")
-                    .foregroundColor(.gray)
-            }
-        }
-    }
-}
-
 struct AddTaskSheet: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject private var coreDataManager: CoreDataManager
