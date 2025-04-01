@@ -29,18 +29,18 @@ struct TaskRow: View {
             
             Spacer()
             
-            Menu {
+            HStack(spacing: 12) {
                 Button(action: onEdit) {
-                    Label("Edit", systemImage: "pencil")
+                    Image(systemName: "pencil")
+                        .foregroundColor(.blue)
                 }
                 
-                Button(role: .destructive, action: onDelete) {
-                    Label("Delete", systemImage: "trash")
+                Button(action: onDelete) {
+                    Image(systemName: "trash")
+                        .foregroundColor(.red)
                 }
-            } label: {
-                Image(systemName: "ellipsis.circle")
-                    .foregroundColor(.gray)
             }
         }
+        .contentShape(Rectangle())
     }
 } 
