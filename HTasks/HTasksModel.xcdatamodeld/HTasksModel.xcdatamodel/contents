@@ -2,7 +2,7 @@
 <model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="22522" systemVersion="24.4.0" minimumToolsVersion="Automatic" sourceLanguage="Swift" usedWithSwiftData="YES" userDefinedModelVersionIdentifier="">
     <entity name="AchievementEntity" representedClassName="AchievementEntity" syncable="YES" codeGenerationType="class">
         <attribute name="completedDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
-        <attribute name="description" optional="YES" attributeType="String"/>
+        <attribute name="achievementDescription" optional="YES" attributeType="String"/>
         <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
         <attribute name="isCompleted" optional="YES" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
         <attribute name="name" optional="YES" attributeType="String"/>

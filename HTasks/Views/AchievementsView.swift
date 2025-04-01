@@ -40,7 +40,7 @@ struct AchievementRow: View {
                 Text(achievement.name ?? "")
                     .font(.headline)
                 
-                Text(achievement.description ?? "")
+                Text(achievement.achievementDescription ?? "")
                     .font(.subheadline)
                     .foregroundColor(.gray)
                 

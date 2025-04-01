@@ -9,6 +9,7 @@ enum AchievementType: String {
     case streakMaster = "streakMaster"
     case earlyBird = "earlyBird"
     case organizer = "organizer"
+    case consistency = "consistency"
 }
 
 class AchievementManager: ObservableObject {
@@ -22,7 +23,7 @@ class AchievementManager: ObservableObject {
     }
     
     private func setupDefaultAchievements() {
-        let context = coreDataManager.container.viewContext
+        let context = CoreDataManager.shared.container.viewContext
         
         // Check if we already have achievements
         let fetchRequest: NSFetchRequest<AchievementEntity> = AchievementEntity.fetchRequest()
@@ -32,23 +33,22 @@ class AchievementManager: ObservableObject {
             if count == 0 {
                 // Create default achievements
                 let achievements = [
-                    ("First Task", "Complete your first task", AchievementType.firstTask, 1),
-                    ("Task Master", "Complete 10 tasks", AchievementType.taskMaster, 10),
-                    ("Category Explorer", "Use all available categories", AchievementType.categoryExplorer, 5),
-                    ("Streak Master", "Complete tasks for 7 days in a row", AchievementType.streakMaster, 7),
-                    ("Early Bird", "Complete a task before its due date", AchievementType.earlyBird, 1),
-                    ("Organizer", "Create 5 categories", AchievementType.organizer, 5)
+                    (AchievementType.firstTask, "First Task", "Complete your first task"),
+                    (AchievementType.taskMaster, "Task Master", "Complete 10 tasks"),
+                    (AchievementType.earlyBird, "Early Bird", "Complete 5 tasks before their due date"),
+                    (AchievementType.organizer, "Organizer", "Create 5 categories"),
+                    (AchievementType.consistency, "Consistency", "Complete tasks for 7 days in a row")
                 ]
                 
-                for (name, description, type, requiredProgress) in achievements {
+                for (type, name, description) in achievements {
                     let achievement = AchievementEntity(context: context)
                     achievement.id = UUID()
                     achievement.name = name
-                    achievement.description = description
+                    achievement.achievementDescription = description
                     achievement.type = type.rawValue
-                    achievement.requiredProgress = Int32(requiredProgress)
-                    achievement.progress = 0
                     achievement.isCompleted = false
+                    achievement.progress = 0
+                    achievement.requiredProgress = getRequiredProgress(for: type)
                 }
                 
                 try context.save()
@@ -84,6 +84,8 @@ class AchievementManager: ObservableObject {
                     checkEarlyBirdAchievement(achievement)
                 case .organizer:
                     checkOrganizerAchievement(achievement)
+                case .consistency:
+                    checkConsistencyAchievement(achievement)
                 }
             }
             
@@ -176,6 +178,38 @@ class AchievementManager: ObservableObject {
         achievement.progress = Int32(categories.count)
         
         if categories.count >= Int(achievement.requiredProgress) {
+            completeAchievement(achievement)
+        }
+    }
+    
+    private func checkConsistencyAchievement(_ achievement: AchievementEntity) {
+        let tasks = coreDataManager.fetchTasks()
+        let completedTasks = tasks.filter { $0.isCompleted }
+        
+        // Group completed tasks by date
+        let calendar = Calendar.current
+        let groupedTasks = Dictionary(grouping: completedTasks) { task in
+            calendar.startOfDay(for: task.createdDate ?? Date())
+        }
+        
+        // Sort dates and check for consecutive days
+        let sortedDates = groupedTasks.keys.sorted()
+        var currentStreak = 1
+        var maxStreak = 1
+        
+        for i in 1..<sortedDates.count {
+            let daysBetween = calendar.dateComponents([.day], from: sortedDates[i-1], to: sortedDates[i]).day ?? 0
+            if daysBetween == 1 {
+                currentStreak += 1
+                maxStreak = max(maxStreak, currentStreak)
+            } else {
+                currentStreak = 1
+            }
+        }
+        
+        achievement.progress = Int32(maxStreak)
+        
+        if maxStreak >= Int(achievement.requiredProgress) {
             completeAchievement(achievement)
         }
     }
