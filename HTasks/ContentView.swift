@@ -348,39 +348,10 @@ struct HomeView: View {
         NavigationView {
             ScrollView {
                 VStack(spacing: 20) {
-                    // VisionOS style header with completed chores count
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Number of chores done this week:")
-                            .font(.headline)
-                            .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
-                        
-                        HStack(alignment: .bottom, spacing: 8) {
-                            Text("\(completedChoresCount)")
-                                .font(.system(size: 60, weight: .bold, design: .rounded))
-                                .foregroundColor(colorScheme == .dark ? .white : .black)
-                            
-                            if completedChoresCount == 0 {
-                                Text("u lazy or sum?")
-                                    .font(.system(size: 12))
-                                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .black.opacity(0.6))
-                                    .padding(.bottom, 12)
-                            }
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding()
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.gray.opacity(0.1))
-                    )
-                    .padding(.horizontal)
-                    .padding(.top)
+                    CompletedChoresHeader(count: completedChoresCount, colorScheme: colorScheme)
                     
-                    // Chore list with VisionOS-style design
                     if !chores.isEmpty {
-                        ForEach(chores) { chore in
-                            ChoreRow(chore: chore, onToggle: toggleChore, onEdit: editChore, onDelete: deleteChore)
-                        }
+                        ChoresList(chores: chores, onToggle: toggleChore, onEdit: editChore, onDelete: deleteChore)
                     } else {
                         Text("No chores yet")
                             .foregroundColor(.gray)
@@ -400,230 +371,44 @@ struct HomeView: View {
         }
         .navigationViewStyle(StackNavigationViewStyle())
         .sheet(isPresented: $showingAddChoreSheet) {
-            // Add chore sheet
-            NavigationView {
-                VStack(spacing: 20) {
-                    Form {
-                        Section(header: Text("Chore Details")) {
-                            TextField("Chore name", text: $newChoreTitle)
-                                .padding(.vertical, 8)
-                            
-                            // Category Picker
-                            HStack {
-                                Text("Category")
-                                Spacer()
-                                NavigationLink {
-                                    CategoryPickerView(selectedCategoryId: $selectedCategoryId)
-                                } label: {
-                                    HStack {
-                                        if let selectedCategory = getSelectedCategory() {
-                                            Circle()
-                                                .fill(Color(selectedCategory.color ?? "blue"))
-                                                .frame(width: 12, height: 12)
-                                            Text(selectedCategory.name ?? "")
-                                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
-                                        } else {
-                                            Text("None")
-                                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
-                                        }
-                                    }
-                                }
-                            }
-                            .padding(.vertical, 8)
-                            
-                            // Due Date
-                            Toggle("Set Due Date", isOn: $showingDueDatePicker)
-                                .padding(.vertical, 8)
-                            
-                            if showingDueDatePicker {
-                                DatePicker("Due Date", selection: $dueDate, displayedComponents: [.date])
-                                    .datePickerStyle(GraphicalDatePickerStyle())
-                            }
-                        }
+            AddChoreSheet(
+                newChoreTitle: $newChoreTitle,
+                selectedCategoryId: $selectedCategoryId,
+                dueDate: $dueDate,
+                showingDueDatePicker: $showingDueDatePicker,
+                onAdd: {
+                    if !newChoreTitle.isEmpty {
+                        let newChore = Chore(
+                            title: newChoreTitle,
+                            categoryId: selectedCategoryId,
+                            createdDate: Date(),
+                            dueDate: showingDueDatePicker ? dueDate : nil
+                        )
+                        chores.append(newChore)
+                        saveChores()
+                        resetForm()
+                        showingAddChoreSheet = false
                     }
-                    .scrollContentBackground(.hidden)
-                    .background(colorScheme == .dark ? Color.black : Color.white)
-
-                    HStack(spacing: 15) {
-                        Button(action: {
-                            showingAddChoreSheet = false
-                        }) {
-                            Text("Cancel")
-                                .fontWeight(.medium)
-                                .padding()
-                                .frame(maxWidth: .infinity)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .stroke(colorScheme == .dark ? Color.white.opacity(0.3) : Color.black.opacity(0.3), lineWidth: 1)
-                                )
-                        }
-                        
-                        Button(action: {
-                            if !newChoreTitle.isEmpty {
-                                let newChore = Chore(
-                                    title: newChoreTitle,
-                                    categoryId: selectedCategoryId,
-                                    createdDate: Date(),
-                                    dueDate: showingDueDatePicker ? dueDate : nil
-                                )
-                                chores.append(newChore)
-                                saveChores()
-                                newChoreTitle = ""
-                                selectedCategoryId = nil
-                                dueDate = Date()
-                                showingDueDatePicker = false
-                                showingAddChoreSheet = false
-                            }
-                        }) {
-                            Text("Add")
-                                .fontWeight(.medium)
-                                .padding()
-                                .frame(maxWidth: .infinity)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .fill(colorScheme == .dark ? Color.blue.opacity(0.7) : Color.blue)
-                                )
-                                .foregroundColor(colorScheme == .dark ? .white : .black)
-                        }
-                        .disabled(newChoreTitle.isEmpty)
-                    }
-                    .padding(.horizontal)
-                    .padding(.bottom)
                 }
-                .navigationTitle("Add New Chore")
-                .navigationBarHidden(true)
-            }
-            .onAppear {
-                resetForm()
-            }
+            )
         }
         .sheet(isPresented: $showingSettingsSheet) {
-            // Settings sheet
-            VStack(spacing: 24) {
-                Text("Settings")
-                    .font(.title)
-                    .fontWeight(.bold)
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
-                    .padding(.top, 20)
-                
-                VStack(alignment: .leading, spacing: 20) {
-                    Text("Customization")
-                        .font(.headline)
-                        .foregroundColor(colorScheme == .dark ? .white : .black)
-                    
-                    Toggle("Show Confirmation when clicking delete", isOn: $settings.showDeleteConfirmation)
-                        .onChange(of: settings.showDeleteConfirmation) { _, newValue in
-                            saveSettings()
-                        }
-                        .foregroundColor(colorScheme == .dark ? .white : .black)
-                    
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Change the Confirmation text when clicking delete")
-                            .foregroundColor(settings.showDeleteConfirmation ? 
-                                           (colorScheme == .dark ? .white : .black) : 
-                                           (colorScheme == .dark ? .white.opacity(0.4) : .black.opacity(0.4)))
-                        
-                        TextField("Confirmation message", text: $settings.deleteConfirmationText)
-                            .padding()
-                            .background(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
-                                    .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
-                            )
-                            .disabled(!settings.showDeleteConfirmation)
-                            .opacity(settings.showDeleteConfirmation ? 1.0 : 0.4)
-                            .onChange(of: settings.deleteConfirmationText) { _, newValue in
-                                saveSettings()
-                            }
-                    }
-                }
-                .padding(.horizontal)
-                
-                // Add navigation buttons to new screens
-                VStack(alignment: .leading, spacing: 20) {
-                    Text("Organization")
-                        .font(.headline)
-                        .foregroundColor(colorScheme == .dark ? .white : .black)
-                    
-                    // Categories Button
-                    Button(action: {
-                        showingSettingsSheet = false
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                            presentCategoryManagement = true
-                        }
-                    }) {
-                        HStack {
-                            Image(systemName: "tag.fill")
-                                .foregroundColor(colorScheme == .dark ? .white : .black)
-                            
-                            Text("Manage Categories")
-                                .foregroundColor(colorScheme == .dark ? .white : .black)
-                            
-                            Spacer()
-                            
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .black.opacity(0.6))
-                        }
-                        .padding()
-                        .background(
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
-                                .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
-                        )
-                    }
-                    
-                    // Analytics Button
-                    Button(action: {
-                        showingSettingsSheet = false
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                            presentAnalytics = true
-                        }
-                    }) {
-                        HStack {
-                            Image(systemName: "chart.bar.fill")
-                                .foregroundColor(colorScheme == .dark ? .white : .black)
-                            
-                            Text("Analytics & Achievements")
-                                .foregroundColor(colorScheme == .dark ? .white : .black)
-                            
-                            Spacer()
-                            
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .black.opacity(0.6))
-                        }
-                        .padding()
-                        .background(
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
-                                .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
-                        )
-                    }
-                }
-                .padding(.horizontal)
-                
-                Spacer()
-                
-                Button(action: {
+            SettingsSheet(
+                settings: $settings,
+                onDismiss: { showingSettingsSheet = false },
+                onCategoryManagement: {
                     showingSettingsSheet = false
-                }) {
-                    Text("Done")
-                        .fontWeight(.medium)
-                        .padding()
-                        .frame(maxWidth: .infinity)
-                        .background(
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(colorScheme == .dark ? Color.blue.opacity(0.7) : Color.blue)
-                        )
-                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        presentCategoryManagement = true
+                    }
+                },
+                onAnalytics: {
+                    showingSettingsSheet = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        presentAnalytics = true
+                    }
                 }
-                .padding()
-            }
-            .background(
-                colorScheme == .dark ? Color.black : Color.white
             )
-            .presentationDetents([.medium])
         }
         .sheet(isPresented: $presentCategoryManagement) {
             CategoryManagementView()
@@ -748,6 +533,293 @@ struct HomeView: View {
         guard let categoryId = categoryId else { return nil }
         let categories = coreDataManager.fetchCategories()
         return categories.first { $0.id?.uuidString == categoryId.uuidString }
+    }
+}
+
+struct CompletedChoresHeader: View {
+    let count: Int
+    let colorScheme: ColorScheme
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Number of chores done this week:")
+                .font(.headline)
+                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
+            
+            HStack(alignment: .bottom, spacing: 8) {
+                Text("\(count)")
+                    .font(.system(size: 60, weight: .bold, design: .rounded))
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                
+                if count == 0 {
+                    Text("u lazy or sum?")
+                        .font(.system(size: 12))
+                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .black.opacity(0.6))
+                        .padding(.bottom, 12)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.gray.opacity(0.1))
+        )
+        .padding(.horizontal)
+        .padding(.top)
+    }
+}
+
+struct ChoresList: View {
+    let chores: [Chore]
+    let onToggle: (Chore) -> Void
+    let onEdit: (Chore) -> Void
+    let onDelete: (Chore) -> Void
+    
+    var body: some View {
+        ForEach(chores) { chore in
+            ChoreRow(chore: chore, onToggle: { onToggle(chore) }, onEdit: { onEdit(chore) }, onDelete: { onDelete(chore) })
+        }
+    }
+}
+
+struct AddChoreSheet: View {
+    @Binding var newChoreTitle: String
+    @Binding var selectedCategoryId: UUID?
+    @Binding var dueDate: Date
+    @Binding var showingDueDatePicker: Bool
+    let onAdd: () -> Void
+    @Environment(\.colorScheme) var colorScheme
+    @Environment(\.dismiss) var dismiss
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 20) {
+                Form {
+                    Section(header: Text("Chore Details")) {
+                        TextField("Chore name", text: $newChoreTitle)
+                            .padding(.vertical, 8)
+                        
+                        CategoryPickerRow(selectedCategoryId: $selectedCategoryId)
+                        
+                        Toggle("Set Due Date", isOn: $showingDueDatePicker)
+                            .padding(.vertical, 8)
+                        
+                        if showingDueDatePicker {
+                            DatePicker("Due Date", selection: $dueDate, displayedComponents: [.date])
+                                .datePickerStyle(GraphicalDatePickerStyle())
+                        }
+                    }
+                }
+                .scrollContentBackground(.hidden)
+                .background(colorScheme == .dark ? Color.black : Color.white)
+                
+                AddChoreButtons(
+                    onCancel: { dismiss() },
+                    onAdd: onAdd,
+                    isAddDisabled: newChoreTitle.isEmpty,
+                    colorScheme: colorScheme
+                )
+            }
+            .navigationTitle("Add New Chore")
+            .navigationBarHidden(true)
+        }
+    }
+}
+
+struct CategoryPickerRow: View {
+    @Binding var selectedCategoryId: UUID?
+    @Environment(\.colorScheme) var colorScheme
+    @EnvironmentObject private var coreDataManager: CoreDataManager
+    
+    var body: some View {
+        HStack {
+            Text("Category")
+            Spacer()
+            NavigationLink {
+                CategoryPickerView(selectedCategoryId: $selectedCategoryId)
+            } label: {
+                HStack {
+                    if let selectedCategory = getSelectedCategory() {
+                        Circle()
+                            .fill(Color(selectedCategory.color ?? "blue"))
+                            .frame(width: 12, height: 12)
+                        Text(selectedCategory.name ?? "")
+                            .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
+                    } else {
+                        Text("None")
+                            .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
+                    }
+                }
+            }
+        }
+        .padding(.vertical, 8)
+    }
+    
+    private func getSelectedCategory() -> CategoryEntity? {
+        guard let categoryId = selectedCategoryId else { return nil }
+        let categories = coreDataManager.fetchCategories()
+        return categories.first { $0.id?.uuidString == categoryId.uuidString }
+    }
+}
+
+struct AddChoreButtons: View {
+    let onCancel: () -> Void
+    let onAdd: () -> Void
+    let isAddDisabled: Bool
+    let colorScheme: ColorScheme
+    
+    var body: some View {
+        HStack(spacing: 15) {
+            Button(action: onCancel) {
+                Text("Cancel")
+                    .fontWeight(.medium)
+                    .padding()
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(colorScheme == .dark ? Color.white.opacity(0.3) : Color.black.opacity(0.3), lineWidth: 1)
+                    )
+            }
+            
+            Button(action: onAdd) {
+                Text("Add")
+                    .fontWeight(.medium)
+                    .padding()
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(colorScheme == .dark ? Color.blue.opacity(0.7) : Color.blue)
+                    )
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
+            }
+            .disabled(isAddDisabled)
+        }
+        .padding(.horizontal)
+        .padding(.bottom)
+    }
+}
+
+struct SettingsSheet: View {
+    @Binding var settings: UserSettings
+    let onDismiss: () -> Void
+    let onCategoryManagement: () -> Void
+    let onAnalytics: () -> Void
+    
+    var body: some View {
+        VStack(spacing: 24) {
+            Text("Settings")
+                .font(.title)
+                .fontWeight(.bold)
+                .foregroundColor(colorScheme == .dark ? .white : .black)
+                .padding(.top, 20)
+            
+            VStack(alignment: .leading, spacing: 20) {
+                Text("Customization")
+                    .font(.headline)
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                
+                Toggle("Show Confirmation when clicking delete", isOn: $settings.showDeleteConfirmation)
+                    .onChange(of: settings.showDeleteConfirmation) { _, newValue in
+                        saveSettings()
+                    }
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Change the Confirmation text when clicking delete")
+                        .foregroundColor(settings.showDeleteConfirmation ? 
+                                       (colorScheme == .dark ? .white : .black) : 
+                                       (colorScheme == .dark ? .white.opacity(0.4) : .black.opacity(0.4)))
+                    
+                    TextField("Confirmation message", text: $settings.deleteConfirmationText)
+                        .padding()
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
+                                .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
+                        )
+                        .disabled(!settings.showDeleteConfirmation)
+                        .opacity(settings.showDeleteConfirmation ? 1.0 : 0.4)
+                        .onChange(of: settings.deleteConfirmationText) { _, newValue in
+                            saveSettings()
+                        }
+                }
+            }
+            .padding(.horizontal)
+            
+            // Add navigation buttons to new screens
+            VStack(alignment: .leading, spacing: 20) {
+                Text("Organization")
+                    .font(.headline)
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                
+                // Categories Button
+                Button(action: onCategoryManagement) {
+                    HStack {
+                        Image(systemName: "tag.fill")
+                            .foregroundColor(colorScheme == .dark ? .white : .black)
+                        
+                        Text("Manage Categories")
+                            .foregroundColor(colorScheme == .dark ? .white : .black)
+                        
+                        Spacer()
+                        
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .black.opacity(0.6))
+                    }
+                    .padding()
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
+                            .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
+                    )
+                }
+                
+                // Analytics Button
+                Button(action: onAnalytics) {
+                    HStack {
+                        Image(systemName: "chart.bar.fill")
+                            .foregroundColor(colorScheme == .dark ? .white : .black)
+                        
+                        Text("Analytics & Achievements")
+                            .foregroundColor(colorScheme == .dark ? .white : .black)
+                        
+                        Spacer()
+                        
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .black.opacity(0.6))
+                    }
+                    .padding()
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
+                            .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
+                    )
+                }
+            }
+            .padding(.horizontal)
+            
+            Spacer()
+            
+            Button(action: onDismiss) {
+                Text("Done")
+                    .fontWeight(.medium)
+                    .padding()
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(colorScheme == .dark ? Color.blue.opacity(0.7) : Color.blue)
+                    )
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
+            }
+            .padding()
+        }
+        .background(
+            colorScheme == .dark ? Color.black : Color.white
+        )
+        .presentationDetents([.medium])
     }
 }
 
