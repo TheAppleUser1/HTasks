@@ -651,7 +651,9 @@ struct CategoryPickerRow: View {
                             .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
                     }
                 }
+
             }
+
         }
         .padding(.vertical, 8)
     }
@@ -914,3 +916,4 @@ extension Category {
 #Preview {
     ContentView()
 }
+

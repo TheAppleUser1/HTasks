@@ -6,12 +6,6 @@
 	objectVersion = 77;
 	objects = {
 
-/* Begin PBXBuildFile section */
-		18C3B65A2D9B20C7000FD8C9 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 18C3B61F2D9B1DA0000FD8C9 /* WidgetKit.framework */; };
-		18C3B65B2D9B20C7000FD8C9 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 18C3B6212D9B1DA0000FD8C9 /* SwiftUI.framework */; };
-		18C3B6662D9B20CA000FD8C9 /* HTasksWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 18C3B6592D9B20C7000FD8C9 /* HTasksWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-/* End PBXBuildFile section */
-
 /* Begin PBXContainerItemProxy section */
 		182DBF3F2D98571C006F64D4 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -27,47 +21,13 @@
 			remoteGlobalIDString = 182DBF2D2D98571A006F64D4;
 			remoteInfo = HTasks;
 		};
-		18C3B6642D9B20CA000FD8C9 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 182DBF262D98571A006F64D4 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 18C3B6582D9B20C7000FD8C9;
-			remoteInfo = HTasksWidgetExtension;
-		};
 /* End PBXContainerItemProxy section */
-
-/* Begin PBXCopyFilesBuildPhase section */
-		18C3B6382D9B1DA2000FD8C9 /* Embed Foundation Extensions */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 13;
-			files = (
-				18C3B6662D9B20CA000FD8C9 /* HTasksWidgetExtension.appex in Embed Foundation Extensions */,
-			);
-			name = "Embed Foundation Extensions";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		182DBF2E2D98571A006F64D4 /* HTasks.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HTasks.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		182DBF3E2D98571C006F64D4 /* HTasksTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HTasksTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		182DBF482D98571C006F64D4 /* HTasksUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HTasksUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		18C3B61F2D9B1DA0000FD8C9 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
-		18C3B6212D9B1DA0000FD8C9 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
-		18C3B6592D9B20C7000FD8C9 /* HTasksWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = HTasksWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
-
-/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		18C3B6672D9B20CA000FD8C9 /* Exceptions for "HTasksWidget" folder in "HTasksWidgetExtension" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Info.plist,
-			);
-			target = 18C3B6582D9B20C7000FD8C9 /* HTasksWidgetExtension */;
-		};
-/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		182DBF302D98571A006F64D4 /* HTasks */ = {
@@ -83,14 +43,6 @@
 		182DBF4B2D98571C006F64D4 /* HTasksUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = HTasksUITests;
-			sourceTree = "<group>";
-		};
-		18C3B65C2D9B20C7000FD8C9 /* HTasksWidget */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				18C3B6672D9B20CA000FD8C9 /* Exceptions for "HTasksWidget" folder in "HTasksWidgetExtension" target */,
-			);
-			path = HTasksWidget;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -117,15 +69,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		18C3B6562D9B20C7000FD8C9 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				18C3B65B2D9B20C7000FD8C9 /* SwiftUI.framework in Frameworks */,
-				18C3B65A2D9B20C7000FD8C9 /* WidgetKit.framework in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -135,8 +78,6 @@
 				182DBF302D98571A006F64D4 /* HTasks */,
 				182DBF412D98571C006F64D4 /* HTasksTests */,
 				182DBF4B2D98571C006F64D4 /* HTasksUITests */,
-				18C3B65C2D9B20C7000FD8C9 /* HTasksWidget */,
-				18C3B61E2D9B1DA0000FD8C9 /* Frameworks */,
 				182DBF2F2D98571A006F64D4 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -147,18 +88,8 @@
 				182DBF2E2D98571A006F64D4 /* HTasks.app */,
 				182DBF3E2D98571C006F64D4 /* HTasksTests.xctest */,
 				182DBF482D98571C006F64D4 /* HTasksUITests.xctest */,
-				18C3B6592D9B20C7000FD8C9 /* HTasksWidgetExtension.appex */,
 			);
 			name = Products;
-			sourceTree = "<group>";
-		};
-		18C3B61E2D9B1DA0000FD8C9 /* Frameworks */ = {
-			isa = PBXGroup;
-			children = (
-				18C3B61F2D9B1DA0000FD8C9 /* WidgetKit.framework */,
-				18C3B6212D9B1DA0000FD8C9 /* SwiftUI.framework */,
-			);
-			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -171,12 +102,10 @@
 				182DBF2A2D98571A006F64D4 /* Sources */,
 				182DBF2B2D98571A006F64D4 /* Frameworks */,
 				182DBF2C2D98571A006F64D4 /* Resources */,
-				18C3B6382D9B1DA2000FD8C9 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
-				18C3B6652D9B20CA000FD8C9 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				182DBF302D98571A006F64D4 /* HTasks */,
@@ -234,28 +163,6 @@
 			productReference = 182DBF482D98571C006F64D4 /* HTasksUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
-		18C3B6582D9B20C7000FD8C9 /* HTasksWidgetExtension */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 18C3B6682D9B20CA000FD8C9 /* Build configuration list for PBXNativeTarget "HTasksWidgetExtension" */;
-			buildPhases = (
-				18C3B6552D9B20C7000FD8C9 /* Sources */,
-				18C3B6562D9B20C7000FD8C9 /* Frameworks */,
-				18C3B6572D9B20C7000FD8C9 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				18C3B65C2D9B20C7000FD8C9 /* HTasksWidget */,
-			);
-			name = HTasksWidgetExtension;
-			packageProductDependencies = (
-			);
-			productName = HTasksWidgetExtension;
-			productReference = 18C3B6592D9B20C7000FD8C9 /* HTasksWidgetExtension.appex */;
-			productType = "com.apple.product-type.app-extension";
-		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -277,9 +184,6 @@
 						CreatedOnToolsVersion = 16.2;
 						TestTargetID = 182DBF2D2D98571A006F64D4;
 					};
-					18C3B6582D9B20C7000FD8C9 = {
-						CreatedOnToolsVersion = 16.2;
-					};
 				};
 			};
 			buildConfigurationList = 182DBF292D98571A006F64D4 /* Build configuration list for PBXProject "HTasks" */;
@@ -299,7 +203,6 @@
 				182DBF2D2D98571A006F64D4 /* HTasks */,
 				182DBF3D2D98571C006F64D4 /* HTasksTests */,
 				182DBF472D98571C006F64D4 /* HTasksUITests */,
-				18C3B6582D9B20C7000FD8C9 /* HTasksWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -320,13 +223,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		182DBF462D98571C006F64D4 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		18C3B6572D9B20C7000FD8C9 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -357,13 +253,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		18C3B6552D9B20C7000FD8C9 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -376,11 +265,6 @@
 			isa = PBXTargetDependency;
 			target = 182DBF2D2D98571A006F64D4 /* HTasks */;
 			targetProxy = 182DBF492D98571C006F64D4 /* PBXContainerItemProxy */;
-		};
-		18C3B6652D9B20CA000FD8C9 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 18C3B6582D9B20C7000FD8C9 /* HTasksWidgetExtension */;
-			targetProxy = 18C3B6642D9B20CA000FD8C9 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -638,60 +522,6 @@
 			};
 			name = Release;
 		};
-		18C3B6692D9B20CA000FD8C9 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = P6PV2R9443;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = HTasksWidget/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = HTasksWidget;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.gdaniel.HTasks.HTasksWidget;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SKIP_INSTALL = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Debug;
-		};
-		18C3B66A2D9B20CA000FD8C9 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = P6PV2R9443;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = HTasksWidget/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = HTasksWidget;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.gdaniel.HTasks.HTasksWidget;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SKIP_INSTALL = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Release;
-		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -727,15 +557,6 @@
 			buildConfigurations = (
 				182DBF592D98571C006F64D4 /* Debug */,
 				182DBF5A2D98571C006F64D4 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		18C3B6682D9B20CA000FD8C9 /* Build configuration list for PBXNativeTarget "HTasksWidgetExtension" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				18C3B6692D9B20CA000FD8C9 /* Debug */,
-				18C3B66A2D9B20CA000FD8C9 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
