@@ -815,7 +815,6 @@ struct HomeView: View {
     
     private func getCategory(for categoryId: UUID?) -> CategoryEntity? {
         guard let categoryId = categoryId else { return nil }
-        
         let categories = coreDataManager.fetchCategories()
         return categories.first { $0.id?.uuidString == categoryId.uuidString }
     }
