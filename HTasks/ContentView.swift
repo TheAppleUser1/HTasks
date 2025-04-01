@@ -705,6 +705,7 @@ struct SettingsSheet: View {
     let onDismiss: () -> Void
     let onCategoryManagement: () -> Void
     let onAnalytics: () -> Void
+    @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
         VStack(spacing: 24) {
@@ -820,6 +821,14 @@ struct SettingsSheet: View {
             colorScheme == .dark ? Color.black : Color.white
         )
         .presentationDetents([.medium])
+    }
+    
+    private func saveSettings() {
+        if let encoded = try? JSONEncoder().encode(settings) {
+            UserDefaults.standard.set(encoded, forKey: "userSettings")
+            UserDefaults.standard.synchronize()
+            print("Successfully saved settings")
+        }
     }
 }
 
