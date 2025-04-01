@@ -60,19 +60,13 @@ struct ChoreProvider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<ChoreEntry>) -> ()) {
-        var entries: [ChoreEntry] = []
+        let entries: [ChoreEntry] = [
+            ChoreEntry(date: Date(), chores: loadChores())
+        ]
         
-        // Generate a timeline with entries at each hour
-        let currentDate = Date()
-        for hourOffset in 0 ..< 24 {
-            let entryDate = Calendar.current.date(byAdding: .hour, value: hourOffset, to: currentDate)!
-            let chores = loadChores()
-            let entry = ChoreEntry(date: entryDate, chores: chores)
-            entries.append(entry)
-        }
-        
-        // Create the timeline with the entries and a refresh policy
-        let timeline = Timeline(entries: entries, policy: .atEnd)
+        // Create a timeline that updates every 30 minutes
+        let nextUpdate = Calendar.current.date(byAdding: .minute, value: 30, to: Date()) ?? Date()
+        let timeline = Timeline(entries: entries, policy: .after(nextUpdate))
         completion(timeline)
     }
     
@@ -80,145 +74,74 @@ struct ChoreProvider: TimelineProvider {
         // Try to access the shared container
         guard let userDefaults = UserDefaults(suiteName: "group.com.yourdomain.HTasks") else {
             print("Could not access shared UserDefaults")
-            // Try standard UserDefaults as fallback
-            return loadChoresFromStandardDefaults()
-        }
-        
-        // First, try to get chores from the shared container
-        guard let data = userDefaults.data(forKey: "widgetChores") else {
-            print("No chores data found in shared UserDefaults")
-            return loadChoresFromStandardDefaults()
-        }
-        
-        // Try to decode as WidgetChore array first
-        do {
-            let decoder = JSONDecoder()
-            var chores = try decoder.decode([WidgetChore].self, from: data)
-            return processChores(chores)
-        } catch {
-            // If that fails, try to parse as dictionaries from serialization
-            do {
-                if let choresDicts = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
-                    var chores: [WidgetChore] = []
-                    
-                    for dict in choresDicts {
-                        if let idString = dict["id"] as? String,
-                           let id = UUID(uuidString: idString),
-                           let title = dict["title"] as? String {
-                            
-                            // Get isCompleted, defaulting to false if missing
-                            let isCompleted = dict["isCompleted"] as? Bool ?? false
-                            
-                            // Get optional fields
-                            let categoryIdString = dict["categoryId"] as? String
-                            let categoryId = categoryIdString != nil ? UUID(uuidString: categoryIdString!) : nil
-                            let categoryName = dict["categoryName"] as? String
-                            let categoryColor = dict["categoryColor"] as? String
-                            let dueDate = dict["dueDate"] as? Date
-                            let createdDate = dict["createdDate"] as? Date ?? Date()
-                            
-                            let chore = WidgetChore(
-                                id: id,
-                                title: title,
-                                isCompleted: isCompleted,
-                                categoryId: categoryId,
-                                categoryName: categoryName,
-                                categoryColor: categoryColor,
-                                dueDate: dueDate,
-                                createdDate: createdDate
-                            )
-                            
-                            chores.append(chore)
-                        }
-                    }
-                    
-                    return processChores(chores)
-                }
-            } catch {
-                print("Failed to decode widget chores as dictionaries: \(error)")
-            }
-        }
-        
-        // If all else fails, return mock data
-        return WidgetChore.mockChores
-    }
-    
-    // Helper function to process chores (filter and sort)
-    func processChores(_ chores: [WidgetChore]) -> [WidgetChore] {
-        // Filter out completed chores
-        var filteredChores = chores.filter { !$0.isCompleted }
-        
-        // Sort by due date (if available), then by title
-        filteredChores.sort { (chore1, chore2) in
-            if let date1 = chore1.dueDate, let date2 = chore2.dueDate {
-                return date1 < date2
-            } else if chore1.dueDate != nil {
-                return true
-            } else if chore2.dueDate != nil {
-                return false
-            } else {
-                return chore1.title < chore2.title
-            }
-        }
-        
-        // Return no more than 10 chores for the widget
-        return Array(filteredChores.prefix(10))
-    }
-    
-    // Fallback to standard UserDefaults
-    func loadChoresFromStandardDefaults() -> [WidgetChore] {
-        guard let data = UserDefaults.standard.data(forKey: "widgetChores") else {
-            print("No chores data found in standard UserDefaults")
             return WidgetChore.mockChores
         }
         
-        // Try to parse the data using the same methods as above
+        guard let data = userDefaults.data(forKey: "widgetChores") else {
+            print("No chores data found in shared UserDefaults")
+            return WidgetChore.mockChores
+        }
+        
         do {
-            let decoder = JSONDecoder()
-            var chores = try decoder.decode([WidgetChore].self, from: data)
-            return processChores(chores)
-        } catch {
-            // If that fails, try to parse as dictionaries
-            do {
-                if let choresDicts = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
-                    var chores: [WidgetChore] = []
-                    
-                    for dict in choresDicts {
-                        if let idString = dict["id"] as? String,
-                           let id = UUID(uuidString: idString),
-                           let title = dict["title"] as? String {
-                            
-                            // Get isCompleted, defaulting to false if missing
-                            let isCompleted = dict["isCompleted"] as? Bool ?? false
-                            
-                            // Get optional fields
-                            let categoryIdString = dict["categoryId"] as? String
-                            let categoryId = categoryIdString != nil ? UUID(uuidString: categoryIdString!) : nil
-                            let categoryName = dict["categoryName"] as? String
-                            let categoryColor = dict["categoryColor"] as? String
-                            let dueDate = dict["dueDate"] as? Date
-                            let createdDate = dict["createdDate"] as? Date ?? Date()
-                            
-                            let chore = WidgetChore(
-                                id: id,
-                                title: title,
-                                isCompleted: isCompleted,
-                                categoryId: categoryId,
-                                categoryName: categoryName,
-                                categoryColor: categoryColor,
-                                dueDate: dueDate,
-                                createdDate: createdDate
-                            )
-                            
-                            chores.append(chore)
-                        }
+            if let choresDicts = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+                let decoder = JSONDecoder()
+                let chores = try choresDicts.compactMap { dict -> WidgetChore? in
+                    guard let idString = dict["id"] as? String,
+                          let id = UUID(uuidString: idString),
+                          let title = dict["title"] as? String else {
+                        return nil
                     }
                     
-                    return processChores(chores)
+                    let isCompleted = dict["isCompleted"] as? Bool ?? false
+                    let categoryIdString = dict["categoryId"] as? String
+                    let categoryId = categoryIdString.flatMap { UUID(uuidString: $0) }
+                    let categoryName = dict["categoryName"] as? String
+                    let categoryColor = dict["categoryColor"] as? String
+                    
+                    // Handle date conversion
+                    var dueDate: Date?
+                    if let dueDateDict = dict["dueDate"] as? [String: Any],
+                       let timestamp = dueDateDict["timestamp"] as? TimeInterval {
+                        dueDate = Date(timeIntervalSince1970: timestamp)
+                    }
+                    
+                    var createdDate = Date()
+                    if let createdDateDict = dict["createdDate"] as? [String: Any],
+                       let timestamp = createdDateDict["timestamp"] as? TimeInterval {
+                        createdDate = Date(timeIntervalSince1970: timestamp)
+                    }
+                    
+                    return WidgetChore(
+                        id: id,
+                        title: title,
+                        isCompleted: isCompleted,
+                        categoryId: categoryId,
+                        categoryName: categoryName,
+                        categoryColor: categoryColor,
+                        dueDate: dueDate,
+                        createdDate: createdDate
+                    )
                 }
-            } catch {
-                print("Failed to decode widget chores as dictionaries from standard UserDefaults: \(error)")
+                
+                // Filter and sort chores
+                let filteredChores = chores.filter { !$0.isCompleted }
+                    .sorted { (chore1, chore2) in
+                        if let date1 = chore1.dueDate, let date2 = chore2.dueDate {
+                            return date1 < date2
+                        } else if chore1.dueDate != nil {
+                            return true
+                        } else if chore2.dueDate != nil {
+                            return false
+                        } else {
+                            return chore1.title < chore2.title
+                        }
+                    }
+                
+                // Return up to 10 chores
+                return Array(filteredChores.prefix(10))
             }
+        } catch {
+            print("Failed to decode widget chores: \(error)")
         }
         
         return WidgetChore.mockChores

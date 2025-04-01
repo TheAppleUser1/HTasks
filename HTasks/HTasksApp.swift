@@ -32,6 +32,7 @@ struct HTasksApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(coreDataManager)
                 .onAppear {
                     // Request notification permissions
                     Task {

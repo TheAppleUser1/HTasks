@@ -97,7 +97,7 @@ struct WelcomeView: View {
     @Binding var isWelcomeActive: Bool
     @State private var newChore: String = ""
     @Environment(\.colorScheme) var colorScheme
-    @StateObject private var coreDataManager = CoreDataManager.shared
+    @EnvironmentObject private var coreDataManager: CoreDataManager
     
     let presetChores = [
         "Wash the dishes",
@@ -243,21 +243,35 @@ struct WelcomeView: View {
             let encoded = try JSONEncoder().encode(chores)
             UserDefaults.standard.set(encoded, forKey: "savedChores")
             
-            // For the widget, create simplified chore objects without categories since the welcome view
-            // doesn't have category information yet
+            // Create detailed chore objects for the widget including categories and due dates
             let widgetChores = chores.map { chore -> [String: Any] in
                 var choreDict: [String: Any] = [
                     "id": chore.id.uuidString,
                     "title": chore.title,
                     "isCompleted": chore.isCompleted,
-                    "createdDate": chore.createdDate
+                    "createdDate": ["timestamp": chore.createdDate.timeIntervalSince1970]
                 ]
                 
-                // Add null values explicitly as NSNull()
-                choreDict["categoryId"] = NSNull()
-                choreDict["categoryName"] = NSNull()
-                choreDict["categoryColor"] = NSNull() 
-                choreDict["dueDate"] = NSNull()
+                // Add category information if available
+                if let categoryId = chore.categoryId {
+                    choreDict["categoryId"] = categoryId.uuidString
+                    
+                    if let category = getCategory(for: categoryId) {
+                        choreDict["categoryName"] = category.name
+                        choreDict["categoryColor"] = category.color
+                    }
+                } else {
+                    choreDict["categoryId"] = NSNull()
+                    choreDict["categoryName"] = NSNull()
+                    choreDict["categoryColor"] = NSNull()
+                }
+                
+                // Add due date if available
+                if let dueDate = chore.dueDate {
+                    choreDict["dueDate"] = ["timestamp": dueDate.timeIntervalSince1970]
+                } else {
+                    choreDict["dueDate"] = NSNull()
+                }
                 
                 return choreDict
             }
@@ -292,7 +306,7 @@ struct HomeView: View {
     @State private var selectedCategoryId: UUID?
     @State private var dueDate = Date()
     @State private var showingDueDatePicker = false
-    @StateObject private var coreDataManager = CoreDataManager.shared
+    @EnvironmentObject private var coreDataManager: CoreDataManager
     @Environment(\.colorScheme) var colorScheme
     
     var completedChoresCount: Int {
@@ -719,7 +733,7 @@ struct HomeView: View {
                     "id": chore.id.uuidString,
                     "title": chore.title,
                     "isCompleted": chore.isCompleted,
-                    "createdDate": chore.createdDate
+                    "createdDate": ["timestamp": chore.createdDate.timeIntervalSince1970]
                 ]
                 
                 // Add category information if available
@@ -730,11 +744,17 @@ struct HomeView: View {
                         choreDict["categoryName"] = category.name
                         choreDict["categoryColor"] = category.color
                     }
+                } else {
+                    choreDict["categoryId"] = NSNull()
+                    choreDict["categoryName"] = NSNull()
+                    choreDict["categoryColor"] = NSNull()
                 }
                 
                 // Add due date if available
                 if let dueDate = chore.dueDate {
-                    choreDict["dueDate"] = dueDate
+                    choreDict["dueDate"] = ["timestamp": dueDate.timeIntervalSince1970]
+                } else {
+                    choreDict["dueDate"] = NSNull()
                 }
                 
                 return choreDict
@@ -805,7 +825,7 @@ struct CategoryPickerView: View {
     @Binding var selectedCategoryId: UUID?
     @Environment(\.dismiss) var dismiss
     @Environment(\.colorScheme) var colorScheme
-    @StateObject private var coreDataManager = CoreDataManager.shared
+    @EnvironmentObject private var coreDataManager: CoreDataManager
     @State private var categories: [CategoryEntity] = []
     
     var body: some View {
