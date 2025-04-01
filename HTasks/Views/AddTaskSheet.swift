@@ -1,4 +1,5 @@
 import SwiftUI
+import CoreData
 
 struct AddTaskSheet: View {
     @Environment(\.dismiss) var dismiss
@@ -7,8 +8,6 @@ struct AddTaskSheet: View {
     @State private var dueDate = Date()
     @State private var selectedCategory: CategoryEntity?
     @State private var showingCategoryPicker = false
-    
-    let onAdd: (String, Date?, CategoryEntity?) -> Void
     
     var body: some View {
         NavigationView {
@@ -32,13 +31,17 @@ struct AddTaskSheet: View {
             .navigationBarItems(
                 leading: Button("Cancel") { dismiss() },
                 trailing: Button("Add") {
-                    onAdd(title, dueDate, selectedCategory)
+                    _ = coreDataManager.createTask(
+                        title: title,
+                        dueDate: dueDate,
+                        category: selectedCategory
+                    )
                     dismiss()
                 }
                 .disabled(title.isEmpty)
             )
             .sheet(isPresented: $showingCategoryPicker) {
-                CategoryPickerSheet(selectedCategory: $selectedCategory)
+                CategoryPickerView(selectedCategory: $selectedCategory)
             }
         }
     }

@@ -1,80 +1,75 @@
 import SwiftUI
+import CoreData
 
 struct HomeView: View {
+    @Environment(\.managedObjectContext) private var viewContext
     @EnvironmentObject private var coreDataManager: CoreDataManager
     @State private var showingAddTask = false
-    @State private var showingSettings = false
-    @State private var searchText = ""
-    @State private var selectedCategory: CategoryEntity?
-    @State private var showingCategoryPicker = false
     @State private var showingEditTask = false
+    @State private var showingCategoryPicker = false
     @State private var selectedTask: TaskEntity?
+    @State private var selectedCategory: CategoryEntity?
+    @State private var searchText = ""
     
     var filteredTasks: [TaskEntity] {
-        var tasks = coreDataManager.fetchTasks()
-        
-        if let category = selectedCategory {
-            tasks = tasks.filter { $0.category?.id == category.id }
+        let tasks = coreDataManager.fetchTasks()
+        return tasks.filter { task in
+            let matchesCategory = selectedCategory == nil || task.category == selectedCategory
+            let matchesSearch = searchText.isEmpty || 
+                (task.title?.localizedCaseInsensitiveContains(searchText) ?? false)
+            return matchesCategory && matchesSearch
         }
-        
-        if !searchText.isEmpty {
-            tasks = tasks.filter { ($0.title?.localizedCaseInsensitiveContains(searchText) ?? false) }
-        }
-        
-        return tasks
     }
     
     var body: some View {
         NavigationView {
             List {
-                ForEach(filteredTasks, id: \.id) { task in
-                    TaskRow(task: task) { updatedTask in
-                        coreDataManager.updateTask(updatedTask)
-                    } onEdit: {
-                        selectedTask = task
-                        showingEditTask = true
-                    } onDelete: {
-                        coreDataManager.deleteTask(task)
-                    }
-                }
-                .onDelete(perform: deleteTasks)
-            }
-            .listStyle(InsetGroupedListStyle())
-            .navigationTitle("Tasks")
-            .searchable(text: $searchText, prompt: "Search tasks")
-            .navigationBarItems(
-                leading: Button(action: { showingCategoryPicker = true }) {
-                    Image(systemName: "line.3.horizontal.decrease.circle")
-                },
-                trailing: Button(action: { showingAddTask = true }) {
-                    Image(systemName: "plus")
-                }
-            )
-            .sheet(isPresented: $showingAddTask) {
-                AddTaskSheet { title, dueDate, category in
-                    _ = coreDataManager.createTask(
-                        title: title,
-                        dueDate: dueDate,
-                        category: category
+                ForEach(filteredTasks) { task in
+                    TaskRow(
+                        task: task,
+                        onToggle: { task in
+                            coreDataManager.saveContext()
+                        },
+                        onEdit: {
+                            selectedTask = task
+                            showingEditTask = true
+                        },
+                        onDelete: {
+                            coreDataManager.deleteTask(task)
+                        }
                     )
                 }
             }
-            .sheet(isPresented: $showingEditTask) {
-                if let task = selectedTask {
-                    EditTaskSheet(task: task) { updatedTask in
-                        coreDataManager.updateTask(updatedTask)
+            .navigationTitle("Tasks")
+            .searchable(text: $searchText, prompt: "Search tasks")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: {
+                        showingAddTask = true
+                    }) {
+                        Image(systemName: "plus")
+                    }
+                }
+                
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: {
+                        showingCategoryPicker = true
+                    }) {
+                        Image(systemName: "line.3.horizontal.decrease.circle")
                     }
                 }
             }
-            .sheet(isPresented: $showingCategoryPicker) {
-                CategoryPickerSheet(selectedCategory: $selectedCategory)
+            .sheet(isPresented: $showingAddTask) {
+                AddTaskSheet(coreDataManager: coreDataManager)
             }
-        }
-    }
-    
-    private func deleteTasks(at offsets: IndexSet) {
-        for index in offsets {
-            coreDataManager.deleteTask(filteredTasks[index])
+            .sheet(isPresented: $showingEditTask) {
+                if let task = selectedTask {
+                    EditTaskSheet(task: task, coreDataManager: coreDataManager)
+                }
+            }
+            .sheet(isPresented: $showingCategoryPicker) {
+                CategoryPickerView(selectedCategory: $selectedCategory)
+            }
         }
     }
 }
