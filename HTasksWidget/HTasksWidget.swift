@@ -83,68 +83,70 @@ struct ChoreProvider: TimelineProvider {
         }
         
         do {
-            if let choresDicts = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
-                let decoder = JSONDecoder()
-                let chores = try choresDicts.compactMap { dict -> WidgetChore? in
-                    guard let idString = dict["id"] as? String,
-                          let id = UUID(uuidString: idString),
-                          let title = dict["title"] as? String else {
-                        return nil
-                    }
-                    
-                    let isCompleted = dict["isCompleted"] as? Bool ?? false
-                    let categoryIdString = dict["categoryId"] as? String
-                    let categoryId = categoryIdString.flatMap { UUID(uuidString: $0) }
-                    let categoryName = dict["categoryName"] as? String
-                    let categoryColor = dict["categoryColor"] as? String
-                    
-                    // Handle date conversion
-                    var dueDate: Date?
-                    if let dueDateDict = dict["dueDate"] as? [String: Any],
-                       let timestamp = dueDateDict["timestamp"] as? TimeInterval {
-                        dueDate = Date(timeIntervalSince1970: timestamp)
-                    }
-                    
-                    var createdDate = Date()
-                    if let createdDateDict = dict["createdDate"] as? [String: Any],
-                       let timestamp = createdDateDict["timestamp"] as? TimeInterval {
-                        createdDate = Date(timeIntervalSince1970: timestamp)
-                    }
-                    
-                    return WidgetChore(
-                        id: id,
-                        title: title,
-                        isCompleted: isCompleted,
-                        categoryId: categoryId,
-                        categoryName: categoryName,
-                        categoryColor: categoryColor,
-                        dueDate: dueDate,
-                        createdDate: createdDate
-                    )
+            let jsonObject = try JSONSerialization.jsonObject(with: data)
+            guard let choresDicts = jsonObject as? [[String: Any]] else {
+                print("Failed to cast JSON to dictionary array")
+                return WidgetChore.mockChores
+            }
+            
+            let chores = choresDicts.compactMap { dict -> WidgetChore? in
+                guard let idString = dict["id"] as? String,
+                      let id = UUID(uuidString: idString),
+                      let title = dict["title"] as? String else {
+                    return nil
                 }
                 
-                // Filter and sort chores
-                let filteredChores = chores.filter { !$0.isCompleted }
-                    .sorted { (chore1, chore2) in
-                        if let date1 = chore1.dueDate, let date2 = chore2.dueDate {
-                            return date1 < date2
-                        } else if chore1.dueDate != nil {
-                            return true
-                        } else if chore2.dueDate != nil {
-                            return false
-                        } else {
-                            return chore1.title < chore2.title
-                        }
-                    }
+                let isCompleted = dict["isCompleted"] as? Bool ?? false
+                let categoryIdString = dict["categoryId"] as? String
+                let categoryId = categoryIdString.flatMap { UUID(uuidString: $0) }
+                let categoryName = dict["categoryName"] as? String
+                let categoryColor = dict["categoryColor"] as? String
                 
-                // Return up to 10 chores
-                return Array(filteredChores.prefix(10))
+                // Handle date conversion
+                var dueDate: Date?
+                if let dueDateDict = dict["dueDate"] as? [String: Any],
+                   let timestamp = dueDateDict["timestamp"] as? TimeInterval {
+                    dueDate = Date(timeIntervalSince1970: timestamp)
+                }
+                
+                var createdDate = Date()
+                if let createdDateDict = dict["createdDate"] as? [String: Any],
+                   let timestamp = createdDateDict["timestamp"] as? TimeInterval {
+                    createdDate = Date(timeIntervalSince1970: timestamp)
+                }
+                
+                return WidgetChore(
+                    id: id,
+                    title: title,
+                    isCompleted: isCompleted,
+                    categoryId: categoryId,
+                    categoryName: categoryName,
+                    categoryColor: categoryColor,
+                    dueDate: dueDate,
+                    createdDate: createdDate
+                )
             }
+            
+            // Filter and sort chores
+            let filteredChores = chores.filter { !$0.isCompleted }
+                .sorted { (chore1, chore2) in
+                    if let date1 = chore1.dueDate, let date2 = chore2.dueDate {
+                        return date1 < date2
+                    } else if chore1.dueDate != nil {
+                        return true
+                    } else if chore2.dueDate != nil {
+                        return false
+                    } else {
+                        return chore1.title < chore2.title
+                    }
+                }
+            
+            // Return up to 10 chores
+            return Array(filteredChores.prefix(10))
         } catch {
             print("Failed to decode widget chores: \(error)")
+            return WidgetChore.mockChores
         }
-        
-        return WidgetChore.mockChores
     }
 }
 
