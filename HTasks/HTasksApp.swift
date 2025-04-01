@@ -15,14 +15,8 @@ struct HTasksApp: App {
     @StateObject private var notificationManager = NotificationManager.shared
     
     init() {
-        // Setup
+        // Setup UI appearance
         UINavigationBar.appearance().tintColor = .label
-        
-        // Setup CoreData
-        coreDataManager.setupDefaultData()
-        
-        // Reload widgets
-        reloadWidgets()
     }
     
     func reloadWidgets() {
@@ -33,9 +27,16 @@ struct HTasksApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(coreDataManager)
+                .environmentObject(notificationManager)
                 .onAppear {
+                    // Setup default data in Core Data
+                    coreDataManager.setupDefaultData()
+                    
                     // Request notification permissions
-                    NotificationManager.shared.requestAuthorization()
+                    notificationManager.requestAuthorization()
+                    
+                    // Reload widgets
+                    reloadWidgets()
                 }
                 .onChange(of: coreDataManager.viewContext.hasChanges) { _, _ in
                     reloadWidgets()
