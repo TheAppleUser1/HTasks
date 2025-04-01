@@ -1,0 +1,16 @@
+entity CategoryEntity {
+    attribute color: String
+    attribute createdDate: Date
+    attribute id: UUID
+    attribute name: String
+    relationship chores: ChoreEntity
+}
+
+entity ChoreEntity {
+    attribute createdDate: Date
+    attribute dueDate: Date optional
+    attribute id: UUID
+    attribute isCompleted: Boolean
+    attribute title: String
+    relationship category: CategoryEntity
+} 

@@ -6,12 +6,20 @@
 //
 
 import SwiftUI
+import CoreData
 
 @main
 struct HTasksApp: App {
+    @StateObject private var coreDataManager = CoreDataManager.shared
+    
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(coreDataManager)
+                .onAppear {
+                    // Setup default data in Core Data
+                    coreDataManager.setupDefaultData()
+                }
         }
     }
 }
