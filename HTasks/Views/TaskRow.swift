@@ -29,16 +29,17 @@ struct TaskRow: View {
             
             Spacer()
             
-            HStack(spacing: 12) {
+            Menu {
                 Button(action: onEdit) {
-                    Image(systemName: "pencil")
-                        .foregroundColor(.blue)
+                    Label("Edit", systemImage: "pencil")
                 }
                 
-                Button(action: onDelete) {
-                    Image(systemName: "trash")
-                        .foregroundColor(.red)
+                Button(role: .destructive, action: onDelete) {
+                    Label("Delete", systemImage: "trash")
                 }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .foregroundColor(.gray)
             }
         }
         .contentShape(Rectangle())
