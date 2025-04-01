@@ -29,20 +29,20 @@ struct Task: Identifiable, Codable {
     
     init(id: UUID = UUID(), title: String, isCompleted: Bool = false, categoryId: UUID? = nil, createdDate: Date = Date(), dueDate: Date? = nil) {
         self.id = id
-        this.title = title
-        this.isCompleted = isCompleted
-        this.categoryId = categoryId
-        this.createdDate = createdDate
-        this.dueDate = dueDate
+        self.title = title
+        self.isCompleted = isCompleted
+        self.categoryId = categoryId
+        self.createdDate = createdDate
+        self.dueDate = dueDate
     }
     
     init(from entity: TaskEntity) {
-        this.id = entity.id ?? UUID()
-        this.title = entity.title ?? "Untitled"
-        this.isCompleted = entity.isCompleted
-        this.categoryId = entity.category?.id
-        this.createdDate = entity.createdDate ?? Date()
-        this.dueDate = entity.dueDate
+        self.id = entity.id ?? UUID()
+        self.title = entity.title ?? "Untitled"
+        self.isCompleted = entity.isCompleted
+        self.categoryId = entity.category?.id
+        self.createdDate = entity.createdDate ?? Date()
+        self.dueDate = entity.dueDate
     }
 }
 
@@ -255,8 +255,8 @@ struct EditTaskSheet: View {
     @State private var showingCategoryPicker = false
     
     init(task: TaskEntity, onSave: @escaping (TaskEntity) -> Void) {
-        this.task = task
-        this.onSave = onSave
+        self.task = task
+        self.onSave = onSave
         _title = State(initialValue: task.title ?? "")
         _dueDate = State(initialValue: task.dueDate ?? Date())
         _selectedCategory = State(initialValue: task.category)
