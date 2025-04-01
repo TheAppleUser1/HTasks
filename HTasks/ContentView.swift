@@ -300,180 +300,60 @@ struct HomeView: View {
     }
     
     var body: some View {
-        ZStack {
-            VStack(spacing: 0) {
-                // VisionOS style header with completed chores count
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Number of chores done this week:")
-                        .font(.headline)
-                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
-                    
-                    HStack(alignment: .bottom, spacing: 8) {
-                        Text("\(completedChoresCount)")
-                            .font(.system(size: 60, weight: .bold, design: .rounded))
-                            .foregroundColor(colorScheme == .dark ? .white : .black)
+        NavigationView {
+            ScrollView {
+                VStack(spacing: 20) {
+                    // VisionOS style header with completed chores count
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Number of chores done this week:")
+                            .font(.headline)
+                            .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
                         
-                        if completedChoresCount == 0 {
-                            Text("u lazy or sum?")
-                                .font(.system(size: 12))
-                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .black.opacity(0.6))
-                                .padding(.bottom, 12)
+                        HStack(alignment: .bottom, spacing: 8) {
+                            Text("\(completedChoresCount)")
+                                .font(.system(size: 60, weight: .bold, design: .rounded))
+                                .foregroundColor(colorScheme == .dark ? .white : .black)
+                            
+                            if completedChoresCount == 0 {
+                                Text("u lazy or sum?")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .black.opacity(0.6))
+                                    .padding(.bottom, 12)
+                            }
                         }
                     }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding()
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.gray.opacity(0.1))
-                )
-                .padding(.horizontal)
-                .padding(.top)
-                
-                // Chore list with VisionOS-style design
-                List {
-                    ForEach(chores) { chore in
-                        HStack {
-                            // Try to find category for this chore
-                            let category = getCategory(for: chore.categoryId)
-                            
-                            Text(chore.title)
-                                .font(.headline)
-                                .foregroundColor(
-                                    chore.isCompleted ? 
-                                        (colorScheme == .dark ? .white.opacity(0.5) : .black.opacity(0.5)) : 
-                                        (colorScheme == .dark ? .white : .black)
-                                )
-                                .strikethrough(chore.isCompleted)
-                            
-                            if let category = category {
-                                Circle()
-                                    .fill(Color(category.color ?? "blue"))
-                                    .frame(width: 8, height: 8)
-                                    .padding(.leading, 4)
-                            }
-                            
-                            Spacer()
-                            
-                            // Checkmark button
-                            Button(action: {
-                                toggleChoreCompletion(chore)
-                            }) {
-                                Image(systemName: chore.isCompleted ? "checkmark.circle.fill" : "circle")
-                                    .font(.title2)
-                                    .foregroundColor(colorScheme == .dark ? .white : .black)
-                                    .padding(5)
-                                    .contentShape(Rectangle())
-                            }
-                            .buttonStyle(BorderlessButtonStyle())
-                            
-                            // Delete button
-                            Button(action: {
-                                choreToDelete = chore
-                                if settings.showDeleteConfirmation {
-                                    showingDeleteAlert = true
-                                } else {
-                                    deleteChore(chore)
-                                }
-                            }) {
-                                Image(systemName: "trash.fill")
-                                    .font(.title2)
-                                    .foregroundColor(colorScheme == .dark ? .white : .black)
-                                    .padding(5)
-                                    .contentShape(Rectangle())
-                            }
-                            .buttonStyle(BorderlessButtonStyle())
-                        }
-                        .padding(.vertical, 8)
-                        .listRowBackground(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
-                                .padding(EdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8))
-                        )
-                        .listRowSeparator(.hidden)
-                        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-                    }
-                }
-                .listStyle(PlainListStyle())
-                .background(Color.clear)
-                .alert(isPresented: $showingDeleteAlert) {
-                    Alert(
-                        title: Text("Are you sure you want to delete this chore?"),
-                        message: Text(settings.deleteConfirmationText),
-                        primaryButton: .destructive(Text("Delete").foregroundColor(colorScheme == .dark ? .white : .black)) {
-                            if let choreToDelete = choreToDelete {
-                                deleteChore(choreToDelete)
-                            }
-                        },
-                        secondaryButton: .cancel(Text("No").foregroundColor(colorScheme == .dark ? .white : .black))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding()
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.gray.opacity(0.1))
                     )
-                }
-            }
-            
-            // Floating add button
-            VStack {
-                Spacer()
-                HStack {
-                    Spacer()
-                    Button(action: {
-                        showingAddChoreSheet = true
-                    }) {
-                        Image(systemName: "plus")
-                            .font(.title)
-                            .fontWeight(.bold)
-                            .foregroundColor(colorScheme == .dark ? .black : .white)
-                            .frame(width: 60, height: 60)
-                            .background(
-                                Circle()
-                                    .fill(colorScheme == .dark ? .white : .black)
-                                    .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
-                            )
+                    .padding(.horizontal)
+                    .padding(.top)
+                    
+                    // Chore list with VisionOS-style design
+                    if !chores.isEmpty {
+                        ForEach(chores) { chore in
+                            ChoreRow(chore: chore, onToggle: toggleChore, onDelete: deleteChore)
+                        }
+                    } else {
+                        Text("No chores yet")
+                            .foregroundColor(.gray)
+                            .padding()
                     }
-                    .padding(.trailing, 20)
-                    .padding(.bottom, 20)
+                }
+                .padding(.vertical)
+            }
+            .navigationTitle("HTasks")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: { showingAddChoreSheet = true }) {
+                        Image(systemName: "plus")
+                    }
                 }
             }
-            
-            // Add a button at the bottom to force refresh widgets
-            Button(action: {
-                saveChores()
-                print("Force refreshed widget data")
-            }) {
-                HStack {
-                    Image(systemName: "arrow.clockwise.circle.fill")
-                    Text("Refresh Widget")
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(colorScheme == .dark ? Color.gray.opacity(0.3) : Color.gray.opacity(0.2))
-                )
-            }
-            .padding(.bottom, 8)
         }
-        .navigationTitle("My Chores")
-        .navigationBarItems(trailing: 
-            Button(action: {
-                showingSettingsSheet = true
-            }) {
-                Image(systemName: "gear")
-                    .font(.title2)
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
-                    .padding(8)
-                    .contentShape(Rectangle())
-            }
-        )
-        .background(
-            LinearGradient(
-                gradient: Gradient(colors: colorScheme == .dark ? 
-                                  [Color.black, Color.blue.opacity(0.2)] : 
-                                  [Color.white, Color.blue.opacity(0.1)]),
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .edgesIgnoringSafeArea(.all)
-        )
+        .navigationViewStyle(StackNavigationViewStyle())
         .sheet(isPresented: $showingAddChoreSheet) {
             // Add chore sheet
             NavigationView {
@@ -711,7 +591,7 @@ struct HomeView: View {
         }
     }
     
-    private func toggleChoreCompletion(_ chore: Chore) {
+    private func toggleChore(_ chore: Chore) {
         if let index = chores.firstIndex(where: { $0.id == chore.id }) {
             chores[index].isCompleted.toggle()
             saveChores()
