@@ -60,25 +60,25 @@ struct ChoreProvider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<ChoreEntry>) -> ()) {
+        // Load the latest chores each time the timeline is requested
+        let currentChores = loadChores()
+        print("Widget timeline generating with \(currentChores.count) chores")
+        
+        // Create a single entry with the current chores and date
         let entries: [ChoreEntry] = [
-            ChoreEntry(date: Date(), chores: loadChores())
+            ChoreEntry(date: Date(), chores: currentChores)
         ]
         
-        // Create a timeline that updates every 30 minutes
-        let nextUpdate = Calendar.current.date(byAdding: .minute, value: 30, to: Date()) ?? Date()
+        // Update every 15 minutes or when the app tells us to
+        let nextUpdate = Calendar.current.date(byAdding: .minute, value: 15, to: Date()) ?? Date()
         let timeline = Timeline(entries: entries, policy: .after(nextUpdate))
         completion(timeline)
     }
     
     func loadChores() -> [WidgetChore] {
-        // Try to access the shared container
-        guard let userDefaults = UserDefaults(suiteName: "group.com.yourdomain.HTasks") else {
-            print("Could not access shared UserDefaults")
-            return WidgetChore.mockChores
-        }
-        
-        guard let data = userDefaults.data(forKey: "widgetChores") else {
-            print("No chores data found in shared UserDefaults")
+        // Try to get data from standard UserDefaults
+        guard let data = UserDefaults.standard.data(forKey: "widgetChores") else {
+            print("No chores data found in UserDefaults")
             return WidgetChore.mockChores
         }
         
@@ -127,6 +127,8 @@ struct ChoreProvider: TimelineProvider {
                 )
             }
             
+            print("Widget loaded \(chores.count) chores from UserDefaults")
+            
             // Filter and sort chores
             let filteredChores = chores.filter { !$0.isCompleted }
                 .sorted { (chore1, chore2) in
@@ -141,8 +143,8 @@ struct ChoreProvider: TimelineProvider {
                     }
                 }
             
-            // Return up to 10 chores
-            return Array(filteredChores.prefix(10))
+            // If we have filtered chores, return them, otherwise use mock data
+            return filteredChores.isEmpty ? WidgetChore.mockChores : Array(filteredChores.prefix(10))
         } catch {
             print("Failed to decode widget chores: \(error)")
             return WidgetChore.mockChores

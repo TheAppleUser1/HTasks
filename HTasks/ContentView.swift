@@ -264,15 +264,15 @@ struct WelcomeView: View {
             
             // Save to the shared App Group container for widget access
             let widgetData = try JSONSerialization.data(withJSONObject: widgetChores)
-            if let userDefaults = UserDefaults(suiteName: "group.com.yourdomain.HTasks") {
-                userDefaults.set(widgetData, forKey: "widgetChores")
-            } else {
-                // Fallback to standard UserDefaults if app group is not available
-                UserDefaults.standard.set(widgetData, forKey: "widgetChores")
-            }
+            
+            // Use standard UserDefaults since we may not have app groups set up
+            UserDefaults.standard.set(widgetData, forKey: "widgetChores")
+            
+            print("WelcomeView: Saved \(widgetChores.count) chores to widget, titles: \(widgetChores.map { ($0["title"] as? String) ?? "unknown" })")
             
             // Tell the widget to refresh with new data
             WidgetCenter.shared.reloadAllTimelines()
+            print("WelcomeView: Widget timelines reloaded")
         } catch {
             print("Failed to save chores: \(error)")
         }
@@ -433,6 +433,24 @@ struct HomeView: View {
                     .padding(.bottom, 20)
                 }
             }
+            
+            // Add a button at the bottom to force refresh widgets
+            Button(action: {
+                saveChores()
+                print("Force refreshed widget data")
+            }) {
+                HStack {
+                    Image(systemName: "arrow.clockwise.circle.fill")
+                    Text("Refresh Widget")
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(colorScheme == .dark ? Color.gray.opacity(0.3) : Color.gray.opacity(0.2))
+                )
+            }
+            .padding(.bottom, 8)
         }
         .navigationTitle("My Chores")
         .navigationBarItems(trailing: 
@@ -746,17 +764,15 @@ struct HomeView: View {
                 return choreDict
             }
             
-            // Save to the shared App Group container for widget access
+            // Save to standard UserDefaults for widget access
             let widgetData = try JSONSerialization.data(withJSONObject: widgetChores)
-            if let userDefaults = UserDefaults(suiteName: "group.com.yourdomain.HTasks") {
-                userDefaults.set(widgetData, forKey: "widgetChores")
-            } else {
-                // Fallback to standard UserDefaults if app group is not available
-                UserDefaults.standard.set(widgetData, forKey: "widgetChores")
-            }
+            UserDefaults.standard.set(widgetData, forKey: "widgetChores")
+            
+            print("Saved \(widgetChores.count) chores to widget, titles: \(widgetChores.map { ($0["title"] as? String) ?? "unknown" })")
             
             // Tell the widget to refresh with new data
             WidgetCenter.shared.reloadAllTimelines()
+            print("Widget timelines reloaded")
         } catch {
             print("Failed to save chores: \(error)")
         }
