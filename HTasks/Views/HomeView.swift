@@ -64,7 +64,7 @@ struct HomeView: View {
             }
             .sheet(isPresented: $showingEditTask) {
                 if let task = selectedTask {
-                    EditTaskSheet(task: task, coreDataManager: coreDataManager)
+                    EditTaskSheet(task: task)
                 }
             }
             .sheet(isPresented: $showingCategoryPicker) {

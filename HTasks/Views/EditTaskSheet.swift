@@ -10,7 +10,7 @@ struct EditTaskSheet: View {
     @State private var selectedCategory: CategoryEntity?
     @State private var showingCategoryPicker = false
     
-    init(task: TaskEntity, coreDataManager: CoreDataManager) {
+    init(task: TaskEntity) {
         self.task = task
         self._title = State(initialValue: task.title ?? "")
         self._dueDate = State(initialValue: task.dueDate ?? Date())
