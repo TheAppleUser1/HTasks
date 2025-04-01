@@ -243,7 +243,8 @@ struct WelcomeView: View {
             let encoded = try JSONEncoder().encode(chores)
             UserDefaults.standard.set(encoded, forKey: "savedChores")
             
-            // Create detailed chore objects for the widget including categories and due dates
+            // For the widget, create simplified chore objects without categories since the welcome view
+            // doesn't have category information yet
             let widgetChores = chores.map { chore -> [String: Any] in
                 var choreDict: [String: Any] = [
                     "id": chore.id.uuidString,
@@ -252,26 +253,11 @@ struct WelcomeView: View {
                     "createdDate": ["timestamp": chore.createdDate.timeIntervalSince1970]
                 ]
                 
-                // Add category information if available
-                if let categoryId = chore.categoryId {
-                    choreDict["categoryId"] = categoryId.uuidString
-                    
-                    if let category = getCategory(for: categoryId) {
-                        choreDict["categoryName"] = category.name
-                        choreDict["categoryColor"] = category.color
-                    }
-                } else {
-                    choreDict["categoryId"] = NSNull()
-                    choreDict["categoryName"] = NSNull()
-                    choreDict["categoryColor"] = NSNull()
-                }
-                
-                // Add due date if available
-                if let dueDate = chore.dueDate {
-                    choreDict["dueDate"] = ["timestamp": dueDate.timeIntervalSince1970]
-                } else {
-                    choreDict["dueDate"] = NSNull()
-                }
+                // In WelcomeView, we don't have categories yet, so set them all to null
+                choreDict["categoryId"] = NSNull()
+                choreDict["categoryName"] = NSNull()
+                choreDict["categoryColor"] = NSNull()
+                choreDict["dueDate"] = NSNull()
                 
                 return choreDict
             }
