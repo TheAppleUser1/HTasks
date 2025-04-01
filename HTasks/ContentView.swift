@@ -52,6 +52,51 @@ struct UserSettings: Codable {
     var deleteConfirmationText: String = "We offer no liability if your mother gets mad :P"
 }
 
+struct ChoreRow: View {
+    let chore: Chore
+    let onToggle: () -> Void
+    let onEdit: () -> Void
+    let onDelete: () -> Void
+    
+    var body: some View {
+        HStack {
+            Button(action: onToggle) {
+                Image(systemName: chore.isCompleted ? "checkmark.circle.fill" : "circle")
+                    .foregroundColor(chore.isCompleted ? .green : .gray)
+                    .font(.title2)
+            }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(chore.title)
+                    .strikethrough(chore.isCompleted)
+                    .foregroundColor(chore.isCompleted ? .gray : .primary)
+                
+                if let dueDate = chore.dueDate {
+                    Text("Due: \(dueDate, style: .date)")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+            }
+            
+            Spacer()
+            
+            Menu {
+                Button(action: onEdit) {
+                    Label("Edit", systemImage: "pencil")
+                }
+                
+                Button(role: .destructive, action: onDelete) {
+                    Label("Delete", systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .foregroundColor(.gray)
+            }
+        }
+        .padding(.vertical, 8)
+    }
+}
+
 struct ContentView: View {
     @State private var isWelcomeActive = true
     @State private var chores: [Chore] = []
@@ -334,7 +379,7 @@ struct HomeView: View {
                     // Chore list with VisionOS-style design
                     if !chores.isEmpty {
                         ForEach(chores) { chore in
-                            ChoreRow(chore: chore, onToggle: toggleChore, onDelete: deleteChore)
+                            ChoreRow(chore: chore, onToggle: toggleChore, onEdit: editChore, onDelete: deleteChore)
                         }
                     } else {
                         Text("No chores yet")
@@ -596,6 +641,10 @@ struct HomeView: View {
             chores[index].isCompleted.toggle()
             saveChores()
         }
+    }
+    
+    private func editChore(_ chore: Chore) {
+        // Implementation of editChore function
     }
     
     private func deleteChore(_ chore: Chore) {
