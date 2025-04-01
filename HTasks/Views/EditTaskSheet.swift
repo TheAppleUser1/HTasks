@@ -1,22 +1,20 @@
 import SwiftUI
+import CoreData
 
 struct EditTaskSheet: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject private var coreDataManager: CoreDataManager
     let task: TaskEntity
-    let onSave: (TaskEntity) -> Void
-    
     @State private var title: String
     @State private var dueDate: Date
     @State private var selectedCategory: CategoryEntity?
     @State private var showingCategoryPicker = false
     
-    init(task: TaskEntity, onSave: @escaping (TaskEntity) -> Void) {
+    init(task: TaskEntity, coreDataManager: CoreDataManager) {
         self.task = task
-        self.onSave = onSave
-        _title = State(initialValue: task.title ?? "")
-        _dueDate = State(initialValue: task.dueDate ?? Date())
-        _selectedCategory = State(initialValue: task.category)
+        self._title = State(initialValue: task.title ?? "")
+        self._dueDate = State(initialValue: task.dueDate ?? Date())
+        self._selectedCategory = State(initialValue: task.category)
     }
     
     var body: some View {
@@ -44,13 +42,13 @@ struct EditTaskSheet: View {
                     task.title = title
                     task.dueDate = dueDate
                     task.category = selectedCategory
-                    onSave(task)
+                    coreDataManager.saveContext()
                     dismiss()
                 }
                 .disabled(title.isEmpty)
             )
             .sheet(isPresented: $showingCategoryPicker) {
-                CategoryPickerSheet(selectedCategory: $selectedCategory)
+                CategoryPickerView(selectedCategory: $selectedCategory)
             }
         }
     }
