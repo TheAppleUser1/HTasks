@@ -35,12 +35,7 @@ struct HTasksApp: App {
                 .environmentObject(coreDataManager)
                 .onAppear {
                     // Request notification permissions
-                    Task {
-                        _ = await notificationManager.requestAuthorization()
-                    }
-                    
-                    // Force-unwrap is safe here as we're not actually using the result
-                    _ = coreDataManager.viewContext
+                    NotificationManager.shared.requestAuthorization()
                 }
                 .onChange(of: coreDataManager.viewContext.hasChanges) { _, _ in
                     reloadWidgets()

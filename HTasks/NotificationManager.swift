@@ -19,16 +19,13 @@ class NotificationManager: ObservableObject {
         }
     }
     
-    func requestAuthorization() async -> Bool {
-        do {
-            let granted = try await center.requestAuthorization(options: [.alert, .sound, .badge])
-            await MainActor.run {
-                self.isAuthorized = granted
+    func requestAuthorization() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
+            if granted {
+                print("Notification permission granted")
+            } else if let error = error {
+                print("Failed to request notification authorization: \(error.localizedDescription)")
             }
-            return granted
-        } catch {
-            print("Error requesting notification permission: \(error.localizedDescription)")
-            return false
         }
     }
     
