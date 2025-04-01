@@ -252,4 +252,23 @@ class AchievementManager: ObservableObject {
             return []
         }
     }
+    
+    private func getRequiredProgress(for type: AchievementType) -> Int32 {
+        switch type {
+        case .firstTask:
+            return 1
+        case .taskMaster:
+            return 10
+        case .earlyBird:
+            return 5
+        case .organizer:
+            return 5
+        case .consistency:
+            return 7
+        case .categoryExplorer:
+            return 5
+        case .streakMaster:
+            return 7
+        }
+    }
 } 

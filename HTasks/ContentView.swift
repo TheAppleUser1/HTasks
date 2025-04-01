@@ -19,7 +19,7 @@ struct Category: Identifiable, Codable {
     }
 }
 
-struct Chore: Identifiable, Codable {
+struct Task: Identifiable, Codable {
     var id: UUID
     var title: String
     var isCompleted = false
@@ -29,20 +29,20 @@ struct Chore: Identifiable, Codable {
     
     init(id: UUID = UUID(), title: String, isCompleted: Bool = false, categoryId: UUID? = nil, createdDate: Date = Date(), dueDate: Date? = nil) {
         self.id = id
-        self.title = title
-        self.isCompleted = isCompleted
-        self.categoryId = categoryId
-        self.createdDate = createdDate
-        self.dueDate = dueDate
+        this.title = title
+        this.isCompleted = isCompleted
+        this.categoryId = categoryId
+        this.createdDate = createdDate
+        this.dueDate = dueDate
     }
     
-    init(from entity: ChoreEntity) {
-        self.id = entity.id ?? UUID()
-        self.title = entity.title ?? "Untitled"
-        self.isCompleted = entity.isCompleted
-        self.categoryId = entity.categoryID
-        self.createdDate = entity.createdDate ?? Date()
-        self.dueDate = entity.dueDate
+    init(from entity: TaskEntity) {
+        this.id = entity.id ?? UUID()
+        this.title = entity.title ?? "Untitled"
+        this.isCompleted = entity.isCompleted
+        this.categoryId = entity.category?.id
+        this.createdDate = entity.createdDate ?? Date()
+        this.dueDate = entity.dueDate
     }
 }
 
@@ -51,27 +51,27 @@ struct UserSettings: Codable {
     var deleteConfirmationText: String = "We offer no liability if your mother gets mad :P"
 }
 
-struct ChoreRow: View {
-    let chore: ChoreEntity
-    let onToggle: (ChoreEntity) -> Void
+struct TaskRow: View {
+    let task: TaskEntity
+    let onToggle: (TaskEntity) -> Void
     let onEdit: () -> Void
     let onDelete: () -> Void
     
     var body: some View {
         HStack {
             Button(action: {
-                chore.isCompleted.toggle()
-                onToggle(chore)
+                task.isCompleted.toggle()
+                onToggle(task)
             }) {
-                Image(systemName: chore.isCompleted ? "checkmark.circle.fill" : "circle")
-                    .foregroundColor(chore.isCompleted ? .green : .gray)
+                Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                    .foregroundColor(task.isCompleted ? .green : .gray)
             }
             
             VStack(alignment: .leading) {
-                Text(chore.title ?? "")
-                    .strikethrough(chore.isCompleted)
+                Text(task.title ?? "")
+                    .strikethrough(task.isCompleted)
                 
-                if let dueDate = chore.dueDate {
+                if let dueDate = task.dueDate {
                     Text(dueDate, style: .date)
                         .font(.caption)
                         .foregroundColor(.gray)
@@ -122,67 +122,67 @@ struct ContentView: View {
 
 struct HomeView: View {
     @EnvironmentObject private var coreDataManager: CoreDataManager
-    @State private var showingAddChore = false
+    @State private var showingAddTask = false
     @State private var showingSettings = false
     @State private var searchText = ""
     @State private var selectedCategory: CategoryEntity?
     @State private var showingCategoryPicker = false
-    @State private var showingEditChore = false
-    @State private var selectedChore: ChoreEntity?
+    @State private var showingEditTask = false
+    @State private var selectedTask: TaskEntity?
     
-    var filteredChores: [ChoreEntity] {
-        var chores = coreDataManager.fetchChores()
+    var filteredTasks: [TaskEntity] {
+        var tasks = coreDataManager.fetchTasks()
         
         if let category = selectedCategory {
-            chores = chores.filter { $0.category?.id == category.id }
+            tasks = tasks.filter { $0.category?.id == category.id }
         }
         
         if !searchText.isEmpty {
-            chores = chores.filter { ($0.title?.localizedCaseInsensitiveContains(searchText) ?? false) }
+            tasks = tasks.filter { ($0.title?.localizedCaseInsensitiveContains(searchText) ?? false) }
         }
         
-        return chores
+        return tasks
     }
     
     var body: some View {
         NavigationView {
             List {
-                ForEach(filteredChores, id: \.id) { chore in
-                    ChoreRow(chore: chore) { updatedChore in
-                        coreDataManager.updateChore(updatedChore)
+                ForEach(filteredTasks, id: \.id) { task in
+                    TaskRow(task: task) { updatedTask in
+                        coreDataManager.updateTask(updatedTask)
                     } onEdit: {
-                        selectedChore = chore
-                        showingEditChore = true
+                        selectedTask = task
+                        showingEditTask = true
                     } onDelete: {
-                        coreDataManager.deleteChore(chore)
+                        coreDataManager.deleteTask(task)
                     }
                 }
-                .onDelete(perform: deleteChores)
+                .onDelete(perform: deleteTasks)
             }
             .listStyle(InsetGroupedListStyle())
-            .navigationTitle("Chores")
-            .searchable(text: $searchText, prompt: "Search chores")
+            .navigationTitle("Tasks")
+            .searchable(text: $searchText, prompt: "Search tasks")
             .navigationBarItems(
                 leading: Button(action: { showingCategoryPicker = true }) {
                     Image(systemName: "line.3.horizontal.decrease.circle")
                 },
-                trailing: Button(action: { showingAddChore = true }) {
+                trailing: Button(action: { showingAddTask = true }) {
                     Image(systemName: "plus")
                 }
             )
-            .sheet(isPresented: $showingAddChore) {
-                AddChoreSheet { title, dueDate, category in
-                    _ = coreDataManager.createChore(
+            .sheet(isPresented: $showingAddTask) {
+                AddTaskSheet { title, dueDate, category in
+                    _ = coreDataManager.createTask(
                         title: title,
                         dueDate: dueDate,
                         category: category
                     )
                 }
             }
-            .sheet(isPresented: $showingEditChore) {
-                if let chore = selectedChore {
-                    EditChoreSheet(chore: chore) { updatedChore in
-                        coreDataManager.updateChore(updatedChore)
+            .sheet(isPresented: $showingEditTask) {
+                if let task = selectedTask {
+                    EditTaskSheet(task: task) { updatedTask in
+                        coreDataManager.updateTask(updatedTask)
                     }
                 }
             }
@@ -192,14 +192,14 @@ struct HomeView: View {
         }
     }
     
-    private func deleteChores(at offsets: IndexSet) {
+    private func deleteTasks(at offsets: IndexSet) {
         for index in offsets {
-            coreDataManager.deleteChore(filteredChores[index])
+            coreDataManager.deleteTask(filteredTasks[index])
         }
     }
 }
 
-struct AddChoreSheet: View {
+struct AddTaskSheet: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject private var coreDataManager: CoreDataManager
     @State private var title = ""
@@ -212,7 +212,7 @@ struct AddChoreSheet: View {
     var body: some View {
         NavigationView {
             Form {
-                Section(header: Text("Chore Details")) {
+                Section(header: Text("Task Details")) {
                     TextField("Title", text: $title)
                     
                     DatePicker("Due Date", selection: $dueDate, displayedComponents: [.date])
@@ -227,7 +227,7 @@ struct AddChoreSheet: View {
                     }
                 }
             }
-            .navigationTitle("New Chore")
+            .navigationTitle("New Task")
             .navigationBarItems(
                 leading: Button("Cancel") { dismiss() },
                 trailing: Button("Add") {
@@ -243,29 +243,29 @@ struct AddChoreSheet: View {
     }
 }
 
-struct EditChoreSheet: View {
+struct EditTaskSheet: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject private var coreDataManager: CoreDataManager
-    let chore: ChoreEntity
-    let onSave: (ChoreEntity) -> Void
+    let task: TaskEntity
+    let onSave: (TaskEntity) -> Void
     
     @State private var title: String
     @State private var dueDate: Date
     @State private var selectedCategory: CategoryEntity?
     @State private var showingCategoryPicker = false
     
-    init(chore: ChoreEntity, onSave: @escaping (ChoreEntity) -> Void) {
-        self.chore = chore
-        self.onSave = onSave
-        _title = State(initialValue: chore.title ?? "")
-        _dueDate = State(initialValue: chore.dueDate ?? Date())
-        _selectedCategory = State(initialValue: chore.category)
+    init(task: TaskEntity, onSave: @escaping (TaskEntity) -> Void) {
+        this.task = task
+        this.onSave = onSave
+        _title = State(initialValue: task.title ?? "")
+        _dueDate = State(initialValue: task.dueDate ?? Date())
+        _selectedCategory = State(initialValue: task.category)
     }
     
     var body: some View {
         NavigationView {
             Form {
-                Section(header: Text("Chore Details")) {
+                Section(header: Text("Task Details")) {
                     TextField("Title", text: $title)
                     
                     DatePicker("Due Date", selection: $dueDate, displayedComponents: [.date])
@@ -280,14 +280,14 @@ struct EditChoreSheet: View {
                     }
                 }
             }
-            .navigationTitle("Edit Chore")
+            .navigationTitle("Edit Task")
             .navigationBarItems(
                 leading: Button("Cancel") { dismiss() },
                 trailing: Button("Save") {
-                    chore.title = title
-                    chore.dueDate = dueDate
-                    chore.category = selectedCategory
-                    onSave(chore)
+                    task.title = title
+                    task.dueDate = dueDate
+                    task.category = selectedCategory
+                    onSave(task)
                     dismiss()
                 }
                 .disabled(title.isEmpty)

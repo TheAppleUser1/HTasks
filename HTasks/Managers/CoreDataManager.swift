@@ -5,7 +5,7 @@ import UserNotifications
 class CoreDataManager: ObservableObject {
     static let shared = CoreDataManager()
     
-    private let container: NSPersistentContainer
+    let container: NSPersistentContainer
     private let notificationCenter = UNUserNotificationCenter.current()
     
     private init() {
@@ -27,36 +27,60 @@ class CoreDataManager: ObservableObject {
         }
     }
     
-    func setupDefaultData() {
+    // MARK: - Task Operations
+    
+    func createTask(title: String, dueDate: Date?, category: CategoryEntity?) -> TaskEntity? {
         let context = container.viewContext
-        
-        // Check if we already have categories
-        let fetchRequest: NSFetchRequest<CategoryEntity> = CategoryEntity.fetchRequest()
+        let task = TaskEntity(context: context)
+        task.id = UUID()
+        task.title = title
+        task.dueDate = dueDate
+        task.category = category
+        task.createdDate = Date()
+        task.isCompleted = false
         
         do {
-            let count = try context.count(for: fetchRequest)
-            if count == 0 {
-                // Create default categories
-                let categories = [
-                    ("Personal", "blue"),
-                    ("Work", "red"),
-                    ("Home", "green"),
-                    ("Shopping", "purple")
-                ]
-                
-                for (name, color) in categories {
-                    let category = CategoryEntity(context: context)
-                    category.id = UUID()
-                    category.name = name
-                    category.color = color
-                    category.createdDate = Date()
-                }
-                
-                try context.save()
-                print("Default categories created")
-            }
+            try context.save()
+            return task
         } catch {
-            print("Error setting up default data: \(error)")
+            print("Error creating task: \(error)")
+            context.rollback()
+            return nil
+        }
+    }
+    
+    func fetchTasks() -> [TaskEntity] {
+        let request: NSFetchRequest<TaskEntity> = TaskEntity.fetchRequest()
+        request.sortDescriptors = [
+            NSSortDescriptor(keyPath: \TaskEntity.isCompleted, ascending: true),
+            NSSortDescriptor(keyPath: \TaskEntity.dueDate, ascending: true)
+        ]
+        
+        do {
+            return try container.viewContext.fetch(request)
+        } catch {
+            print("Error fetching tasks: \(error)")
+            return []
+        }
+    }
+    
+    func updateTask(_ task: TaskEntity) {
+        do {
+            try container.viewContext.save()
+        } catch {
+            print("Error updating task: \(error)")
+            container.viewContext.rollback()
+        }
+    }
+    
+    func deleteTask(_ task: TaskEntity) {
+        container.viewContext.delete(task)
+        
+        do {
+            try container.viewContext.save()
+        } catch {
+            print("Error deleting task: \(error)")
+            container.viewContext.rollback()
         }
     }
     
@@ -93,122 +117,79 @@ class CoreDataManager: ObservableObject {
     }
     
     func deleteCategory(_ category: CategoryEntity) {
-        let context = container.viewContext
-        context.delete(category)
+        container.viewContext.delete(category)
         
         do {
-            try context.save()
+            try container.viewContext.save()
         } catch {
             print("Error deleting category: \(error)")
-            context.rollback()
+            container.viewContext.rollback()
         }
     }
     
-    // MARK: - Task Operations
+    // MARK: - Setup Default Data
     
-    func createTask(title: String, dueDate: Date?, category: CategoryEntity?) -> TaskEntity? {
-        let context = container.viewContext
-        let task = TaskEntity(context: context)
-        task.id = UUID()
-        task.title = title
-        task.dueDate = dueDate
-        task.category = category
-        task.createdDate = Date()
-        task.isCompleted = false
-        
-        do {
-            try context.save()
-            
-            // Schedule notification if due date is set
-            if let dueDate = dueDate {
-                scheduleTaskNotification(for: task)
-            }
-            
-            return task
-        } catch {
-            print("Error creating task: \(error)")
-            context.rollback()
-            return nil
-        }
-    }
-    
-    func fetchTasks() -> [TaskEntity] {
-        let request: NSFetchRequest<TaskEntity> = TaskEntity.fetchRequest()
-        request.sortDescriptors = [
-            NSSortDescriptor(keyPath: \TaskEntity.isCompleted, ascending: true),
-            NSSortDescriptor(keyPath: \TaskEntity.dueDate, ascending: true)
-        ]
-        
-        do {
-            return try container.viewContext.fetch(request)
-        } catch {
-            print("Error fetching tasks: \(error)")
-            return []
-        }
-    }
-    
-    func updateTask(_ task: TaskEntity) {
+    func setupDefaultData() {
         let context = container.viewContext
         
+        // Check if we already have categories
+        let fetchRequest: NSFetchRequest<CategoryEntity> = CategoryEntity.fetchRequest()
+        
         do {
-            try context.save()
-            
-            // Update notification if due date changed
-            if let dueDate = task.dueDate {
-                scheduleTaskNotification(for: task)
-            } else {
-                cancelTaskNotification(for: task)
+            let count = try context.count(for: fetchRequest)
+            if count == 0 {
+                // Create default categories
+                let categories = [
+                    ("Personal", "blue"),
+                    ("Work", "red"),
+                    ("Home", "green"),
+                    ("Shopping", "purple")
+                ]
+                
+                for (name, color) in categories {
+                    let category = CategoryEntity(context: context)
+                    category.id = UUID()
+                    category.name = name
+                    category.color = color
+                    category.createdDate = Date()
+                }
+                
+                try context.save()
+                print("Default categories created")
             }
         } catch {
-            print("Error updating task: \(error)")
-            context.rollback()
+            print("Error setting up default data: \(error)")
         }
     }
     
-    func deleteTask(_ task: TaskEntity) {
-        let context = container.viewContext
-        context.delete(task)
-        
-        do {
-            try context.save()
-            cancelTaskNotification(for: task)
-        } catch {
-            print("Error deleting task: \(error)")
-            context.rollback()
-        }
-    }
+    // MARK: - Notification Methods
     
-    // MARK: - Notification Management
-    
-    private func scheduleTaskNotification(for task: TaskEntity) {
-        guard let taskId = task.id?.uuidString,
-              let title = task.title,
-              let dueDate = task.dueDate else { return }
-        
-        // Cancel any existing notification for this task
-        cancelTaskNotification(for: task)
-        
-        // Schedule notification for 1 hour before due date
-        let notificationDate = dueDate.addingTimeInterval(-3600)
-        let components = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: notificationDate)
+    func scheduleTaskNotification(for task: TaskEntity) {
+        guard let title = task.title,
+              let dueDate = task.dueDate,
+              !task.isCompleted else { return }
         
         let content = UNMutableNotificationContent()
         content.title = "Task Due Soon"
-        content.body = "\(title) is due in 1 hour"
+        content.body = "\(title) is due soon!"
         content.sound = .default
         
+        // Schedule notification for 1 hour before due date
+        let triggerDate = Calendar.current.date(byAdding: .hour, value: -1, to: dueDate) ?? dueDate
+        let components = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: triggerDate)
         let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
-        let request = UNNotificationRequest(identifier: taskId, content: content, trigger: trigger)
         
-        notificationCenter.add(request) { error in
-            if let error = error {
-                print("Error scheduling notification: \(error.localizedDescription)")
-            }
-        }
+        let request = UNNotificationRequest(
+            identifier: task.id?.uuidString ?? UUID().uuidString,
+            content: content,
+            trigger: trigger
+        )
+        
+        notificationCenter.add(request)
     }
     
-    private func cancelTaskNotification(for task: TaskEntity) {
-        guard let taskId = task.id?.uuidString else { return }
-        notificationCenter.removePendingNotificationRequests(withIdentifiers: [taskId])
+    func cancelTaskNotification(for task: TaskEntity) {
+        guard let id = task.id else { return }
+        notificationCenter.removePendingNotificationRequests(withIdentifiers: [id.uuidString])
     }
 } 
