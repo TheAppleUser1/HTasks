@@ -42,8 +42,7 @@ struct EditTaskSheet: View {
                     task.title = title
                     task.dueDate = dueDate
                     task.category = selectedCategory
-                    coreDataManager.saveContext()
-                    dismiss()
+                    $coreDataManager.saveContex                  dismiss()
                 }
                 .disabled(title.isEmpty)
             )
