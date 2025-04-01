@@ -9,7 +9,6 @@ struct HomeView: View {
     @State private var showingCategoryPicker = false
     @State private var showingEditTask = false
     @State private var selectedTask: TaskEntity?
-    @State private var showingAchievements = false
     
     var filteredTasks: [TaskEntity] {
         var tasks = coreDataManager.fetchTasks()
@@ -27,51 +26,20 @@ struct HomeView: View {
     
     var body: some View {
         NavigationView {
-            ScrollView {
-                VStack(spacing: 16) {
-                    List {
-                        ForEach(filteredTasks, id: \.id) { task in
-                            TaskRow(task: task) { updatedTask in
-                                coreDataManager.updateTask(updatedTask)
-                            } onEdit: {
-                                selectedTask = task
-                                showingEditTask = true
-                            } onDelete: {
-                                coreDataManager.deleteTask(task)
-                            }
-                        }
-                        .onDelete(perform: deleteTasks)
+            List {
+                ForEach(filteredTasks, id: \.id) { task in
+                    TaskRow(task: task) { updatedTask in
+                        coreDataManager.updateTask(updatedTask)
+                    } onEdit: {
+                        selectedTask = task
+                        showingEditTask = true
+                    } onDelete: {
+                        coreDataManager.deleteTask(task)
                     }
-                    .listStyle(InsetGroupedListStyle())
-                    
-                    HStack {
-                        Button(action: {
-                            showingAddTask = true
-                        }) {
-                            Label("Add Task", systemImage: "plus.circle.fill")
-                                .font(.headline)
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(Color.blue)
-                                .cornerRadius(10)
-                        }
-                        
-                        Button(action: {
-                            showingAchievements = true
-                        }) {
-                            Label("Achievements", systemImage: "trophy.fill")
-                                .font(.headline)
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(Color.orange)
-                                .cornerRadius(10)
-                        }
-                    }
-                    .padding(.horizontal)
                 }
+                .onDelete(perform: deleteTasks)
             }
+            .listStyle(InsetGroupedListStyle())
             .navigationTitle("Tasks")
             .searchable(text: $searchText, prompt: "Search tasks")
             .navigationBarItems(
@@ -100,9 +68,6 @@ struct HomeView: View {
             }
             .sheet(isPresented: $showingCategoryPicker) {
                 CategoryPickerSheet(selectedCategory: $selectedCategory)
-            }
-            .sheet(isPresented: $showingAchievements) {
-                AchievementsView()
             }
         }
     }
