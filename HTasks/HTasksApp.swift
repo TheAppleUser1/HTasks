@@ -6,12 +6,18 @@
 //
 
 import SwiftUI
+import CoreData
 
 @main
 struct HTasksApp: App {
+    @StateObject private var coreDataManager = CoreDataManager.shared
+    @StateObject private var notificationManager = NotificationManager.shared
+    
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(coreDataManager)
+                .environmentObject(notificationManager)
         }
     }
 }
