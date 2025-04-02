@@ -15,14 +15,12 @@ struct AddTaskSheet: View {
                 Section(header: Text("Task Details")) {
                     TextField("Title", text: $title)
                     
-                    Toggle("Set Due Date", isOn: $hasDueDate)
-                    
-                    if hasDueDate {
-                        DatePicker("Due Date", 
-                            selection: $dueDate,
-                            displayedComponents: [.date]
-                        )
-                    }
+                    DatePicker(
+                        "Due Date",
+                        selection: $dueDate,
+                        displayedComponents: [.date]
+                    )
+                    .datePickerStyle(.graphical)
                     
                     Button(action: { showingCategoryPicker = true }) {
                         HStack {
@@ -40,7 +38,7 @@ struct AddTaskSheet: View {
                 trailing: Button("Add") {
                     _ = coreDataManager.createTask(
                         title: title,
-                        dueDate: hasDueDate ? dueDate : nil,
+                        dueDate: dueDate,
                         category: selectedCategory
                     )
                     dismiss()
