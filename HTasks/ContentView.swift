@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import CoreData
 
 struct Chore: Identifiable, Codable {
     var id: UUID
@@ -25,44 +26,22 @@ struct UserSettings: Codable {
 }
 
 struct ContentView: View {
-    @State private var isWelcomeActive = true
-    @State private var chores: [Chore] = []
-    @Environment(\.colorScheme) var colorScheme
+    @EnvironmentObject private var coreDataManager: CoreDataManager
+    @State private var selectedTab = 0
     
-    // Load saved chores when the view appears
     var body: some View {
-        NavigationView {
-            if isWelcomeActive {
-                WelcomeView(chores: $chores, isWelcomeActive: $isWelcomeActive)
-            } else {
-                HomeView(chores: $chores)
-            }
-        }
-        .navigationViewStyle(StackNavigationViewStyle())
-        .onAppear {
-            loadChores()
+        TabView(selection: $selectedTab) {
+            HomeView()
+                .tabItem {
+                    Label("Tasks", systemImage: "list.bullet")
+                }
+                .tag(0)
             
-            // Check if we should skip welcome screen
-            let hasSeenWelcome = UserDefaults.standard.bool(forKey: "hasSeenWelcome")
-            if hasSeenWelcome && !chores.isEmpty {
-                isWelcomeActive = false
-            }
-        }
-    }
-    
-    private func loadChores() {
-        if let savedChores = UserDefaults.standard.data(forKey: "savedChores") {
-            do {
-                let decodedChores = try JSONDecoder().decode([Chore].self, from: savedChores)
-                self.chores = decodedChores
-                
-                // Log for debugging
-                print("Loaded \(decodedChores.count) chores from UserDefaults")
-            } catch {
-                print("Failed to decode chores: \(error.localizedDescription)")
-            }
-        } else {
-            print("No saved chores found in UserDefaults")
+            SettingsView()
+                .tabItem {
+                    Label("Settings", systemImage: "gear")
+                }
+                .tag(1)
         }
     }
 }
