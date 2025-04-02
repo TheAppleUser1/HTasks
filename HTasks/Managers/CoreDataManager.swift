@@ -1,6 +1,38 @@
 import Foundation
 import CoreData
 import UserNotifications
+import UIKit
+
+// Core Data model types
+@objc(TaskEntity)
+public class TaskEntity: NSManagedObject {
+    @NSManaged public var id: UUID?
+    @NSManaged public var title: String?
+    @NSManaged public var dueDate: Date?
+    @NSManaged public var createdDate: Date?
+    @NSManaged public var isCompleted: Bool
+    @NSManaged public var category: CategoryEntity?
+}
+
+@objc(CategoryEntity)
+public class CategoryEntity: NSManagedObject {
+    @NSManaged public var id: UUID?
+    @NSManaged public var name: String?
+    @NSManaged public var color: UIColor?
+    @NSManaged public var tasks: NSSet?
+}
+
+extension TaskEntity {
+    static func fetchRequest() -> NSFetchRequest<TaskEntity> {
+        return NSFetchRequest<TaskEntity>(entityName: "TaskEntity")
+    }
+}
+
+extension CategoryEntity {
+    static func fetchRequest() -> NSFetchRequest<CategoryEntity> {
+        return NSFetchRequest<CategoryEntity>(entityName: "CategoryEntity")
+    }
+}
 
 class CoreDataManager: ObservableObject {
     static let shared = CoreDataManager()

@@ -1,5 +1,6 @@
 import Foundation
 import UserNotifications
+import CoreData
 
 class NotificationManager: ObservableObject {
     static let shared = NotificationManager()
