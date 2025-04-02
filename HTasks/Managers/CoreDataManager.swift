@@ -69,7 +69,7 @@ class CoreDataManager: ObservableObject {
         task.createdDate = Date()
         task.isCompleted = false
         
-        if let dueDate = dueDate {
+        if task.dueDate != nil {
             notificationManager.scheduleTaskReminder(for: task)
         }
         
@@ -78,7 +78,7 @@ class CoreDataManager: ObservableObject {
     }
     
     func updateTask(_ task: TaskEntity) {
-        if let dueDate = task.dueDate {
+        if task.dueDate != nil {
             notificationManager.scheduleTaskReminder(for: task)
         } else {
             notificationManager.cancelTaskReminder(for: task)

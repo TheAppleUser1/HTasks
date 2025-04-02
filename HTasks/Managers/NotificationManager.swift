@@ -51,7 +51,6 @@ class NotificationManager: ObservableObject {
         UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
         
         let calendar = Calendar.current
-        let now = Date()
         
         for day in reminderDays {
             var components = calendar.dateComponents([.hour, .minute], from: reminderTime)
