@@ -1,5 +1,6 @@
 import SwiftUI
 import CoreData
+import UserNotifications
 
 struct HomeView: View {
     @EnvironmentObject private var coreDataManager: CoreDataManager
@@ -240,6 +241,9 @@ struct HomeView: View {
                         if !newChoreTitle.isEmpty {
                             let newChore = Chore(title: newChoreTitle, dueDate: newChoreDueDate)
                             chores.append(newChore)
+                            if let dueDate = newChoreDueDate {
+                                scheduleNotification(for: newChore)
+                            }
                             saveChores()
                             newChoreTitle = ""
                             newChoreDueDate = nil
@@ -345,6 +349,7 @@ struct HomeView: View {
     
     private func deleteChore(_ chore: Chore) {
         if let index = chores.firstIndex(where: { $0.id == chore.id }) {
+            removeNotification(for: chore)
             chores.remove(at: index)
             saveChores()
         }
@@ -385,5 +390,39 @@ struct HomeView: View {
         } catch {
             print("Failed to encode settings: \(error.localizedDescription)")
         }
+    }
+    
+    private func scheduleNotification(for chore: Chore) {
+        guard let dueDate = chore.dueDate else { return }
+        
+        // Request notification permission if not already granted
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+            if granted {
+                let content = UNMutableNotificationContent()
+                content.title = "Task Due Today"
+                content.body = "Don't forget to complete: \(chore.title)"
+                content.sound = .default
+                
+                // Create a date components for the due date at 9:00 AM
+                var dateComponents = Calendar.current.dateComponents([.year, .month, .day], from: dueDate)
+                dateComponents.hour = 9
+                dateComponents.minute = 0
+                
+                let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: false)
+                let request = UNNotificationRequest(identifier: chore.id.uuidString, content: content, trigger: trigger)
+                
+                UNUserNotificationCenter.current().add(request) { error in
+                    if let error = error {
+                        print("Error scheduling notification: \(error.localizedDescription)")
+                    } else {
+                        print("Successfully scheduled notification for task: \(chore.title)")
+                    }
+                }
+            }
+        }
+    }
+    
+    private func removeNotification(for chore: Chore) {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [chore.id.uuidString])
     }
 } 
