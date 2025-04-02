@@ -12,11 +12,13 @@ struct Chore: Identifiable, Codable {
     var id: UUID
     var title: String
     var isCompleted = false
+    var dueDate: Date?  // Add due date property
     
-    init(id: UUID = UUID(), title: String, isCompleted: Bool = false) {
+    init(id: UUID = UUID(), title: String, isCompleted: Bool = false, dueDate: Date? = nil) {
         self.id = id
         self.title = title
         self.isCompleted = isCompleted
+        self.dueDate = dueDate
     }
 }
 
@@ -26,22 +28,44 @@ struct UserSettings: Codable {
 }
 
 struct ContentView: View {
-    @EnvironmentObject private var coreDataManager: CoreDataManager
-    @State private var selectedTab = 0
+    @State private var isWelcomeActive = true
+    @State private var chores: [Chore] = []
+    @Environment(\.colorScheme) var colorScheme
     
+    // Load saved chores when the view appears
     var body: some View {
-        TabView(selection: $selectedTab) {
-            HomeView()
-                .tabItem {
-                    Label("Tasks", systemImage: "list.bullet")
-                }
-                .tag(0)
+        NavigationView {
+            if isWelcomeActive {
+                WelcomeView(chores: $chores, isWelcomeActive: $isWelcomeActive)
+            } else {
+                HomeView(chores: $chores)
+            }
+        }
+        .navigationViewStyle(StackNavigationViewStyle())
+        .onAppear {
+            loadChores()
             
-            SettingsView()
-                .tabItem {
-                    Label("Settings", systemImage: "gear")
-                }
-                .tag(1)
+            // Check if we should skip welcome screen
+            let hasSeenWelcome = UserDefaults.standard.bool(forKey: "hasSeenWelcome")
+            if hasSeenWelcome && !chores.isEmpty {
+                isWelcomeActive = false
+            }
+        }
+    }
+    
+    private func loadChores() {
+        if let savedChores = UserDefaults.standard.data(forKey: "savedChores") {
+            do {
+                let decodedChores = try JSONDecoder().decode([Chore].self, from: savedChores)
+                self.chores = decodedChores
+                
+                // Log for debugging
+                print("Loaded \(decodedChores.count) chores from UserDefaults")
+            } catch {
+                print("Failed to decode chores: \(error.localizedDescription)")
+            }
+        } else {
+            print("No saved chores found in UserDefaults")
         }
     }
 }
@@ -203,6 +227,7 @@ struct HomeView: View {
     @State private var showingAddChoreSheet = false
     @State private var showingSettingsSheet = false
     @State private var newChoreTitle = ""
+    @State private var newChoreDueDate: Date? = nil  // Add state for due date
     @State private var settings = UserSettings()
     @Environment(\.colorScheme) var colorScheme
     
@@ -245,14 +270,22 @@ struct HomeView: View {
                 List {
                     ForEach(chores) { chore in
                         HStack {
-                            Text(chore.title)
-                                .font(.headline)
-                                .foregroundColor(
-                                    chore.isCompleted ? 
-                                        (colorScheme == .dark ? .white.opacity(0.5) : .black.opacity(0.5)) : 
-                                        (colorScheme == .dark ? .white : .black)
-                                )
-                                .strikethrough(chore.isCompleted)
+                            VStack(alignment: .leading) {
+                                Text(chore.title)
+                                    .font(.headline)
+                                    .foregroundColor(
+                                        chore.isCompleted ? 
+                                            (colorScheme == .dark ? .white.opacity(0.5) : .black.opacity(0.5)) : 
+                                            (colorScheme == .dark ? .white : .black)
+                                    )
+                                    .strikethrough(chore.isCompleted)
+                                
+                                if let dueDate = chore.dueDate {
+                                    Text(dueDate, style: .date)
+                                        .font(.caption)
+                                        .foregroundColor(.gray)
+                                }
+                            }
                             
                             Spacer()
                             
@@ -374,9 +407,26 @@ struct HomeView: View {
                     )
                     .padding(.horizontal)
                 
+                // Add due date picker
+                DatePicker(
+                    "Due Date",
+                    selection: Binding(
+                        get: { newChoreDueDate ?? Date() },
+                        set: { newChoreDueDate = $0 }
+                    ),
+                    displayedComponents: [.date]
+                )
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
+                )
+                .padding(.horizontal)
+                
                 HStack(spacing: 15) {
                     Button(action: {
                         showingAddChoreSheet = false
+                        newChoreDueDate = nil  // Reset due date
                     }) {
                         Text("Cancel")
                             .fontWeight(.medium)
@@ -390,10 +440,11 @@ struct HomeView: View {
                     
                     Button(action: {
                         if !newChoreTitle.isEmpty {
-                            let newChore = Chore(title: newChoreTitle)
+                            let newChore = Chore(title: newChoreTitle, dueDate: newChoreDueDate)
                             chores.append(newChore)
                             saveChores()
                             newChoreTitle = ""
+                            newChoreDueDate = nil
                             showingAddChoreSheet = false
                         }
                     }) {
@@ -416,7 +467,7 @@ struct HomeView: View {
             .background(
                 colorScheme == .dark ? Color.black : Color.white
             )
-            .presentationDetents([.height(250)])
+            .presentationDetents([.height(350)])  // Increase height to accommodate date picker
         }
         .sheet(isPresented: $showingSettingsSheet) {
             // Settings sheet
@@ -441,8 +492,8 @@ struct HomeView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Change the Confirmation text when clicking delete")
                             .foregroundColor(settings.showDeleteConfirmation ? 
-                                           (colorScheme == .dark ? .white : .black) : 
-                                           (colorScheme == .dark ? .white.opacity(0.4) : .black.opacity(0.4)))
+                                            (colorScheme == .dark ? .white : .black) : 
+                                            (colorScheme == .dark ? .white.opacity(0.4) : .black.opacity(0.4)))
                         
                         TextField("Confirmation message", text: $settings.deleteConfirmationText)
                             .padding()
@@ -541,4 +592,5 @@ struct HomeView: View {
 
 #Preview {
     ContentView()
+        .environmentObject(CoreDataManager.shared)
 }
