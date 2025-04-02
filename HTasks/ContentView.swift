@@ -89,14 +89,14 @@ struct WelcomeView: View {
                 .font(.system(size: 40, weight: .bold, design: .rounded))
                 .foregroundColor(colorScheme == .dark ? .white : .black)
             
-            Text("Choose basic chores you want to do at home and get motivated!")
+            Text("Get Motivated.")
                 .font(.headline)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
                 .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
             
             // Chore input field with modern styling
-            TextField("Type your own chore", text: $newChore)
+            TextField("Type your own task", text: $newChore)
                 .padding()
                 .background(
                     RoundedRectangle(cornerRadius: 12)
@@ -113,7 +113,7 @@ struct WelcomeView: View {
             }) {
                 HStack {
                     Image(systemName: "plus.circle.fill")
-                    Text("Add Chore")
+                    Text("Add Task")
                 }
                 .fontWeight(.semibold)
                 .padding()

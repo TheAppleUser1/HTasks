@@ -10,13 +10,14 @@ struct HomeView: View {
     @State private var selectedTask: TaskEntity?
     @State private var selectedCategory: CategoryEntity?
     @State private var searchText = ""
-    @Binding var chores: [Chore]
-    @State private var choreToDelete: Chore?
+    @Binding var tasks: [Chore]
+    @State private var taskToDelete: Chore?
     @State private var showingDeleteAlert = false
-    @State private var showingAddChoreSheet = false
+    @State private var showingAddTaskSheet = false
     @State private var showingSettingsSheet = false
-    @State private var newChoreTitle = ""
-    @State private var newChoreDueDate: Date? = nil
+    @State private var newTaskTitle = ""
+    @State private var newTaskDueDate: Date? = nil
+    @State private var newTaskDueTime: Date = Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: Date()) ?? Date()
     @State private var settings = UserSettings()
     @Environment(\.colorScheme) var colorScheme
     
@@ -30,29 +31,41 @@ struct HomeView: View {
         }
     }
     
-    var completedChoresCount: Int {
-        chores.filter { $0.isCompleted }.count
+    var completedTasksCount: Int {
+        tasks.filter { $0.isCompleted }.count
     }
     
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
-                // VisionOS style header with completed chores count
+                // VisionOS style header with completed tasks count
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Number of chores done this week:")
+                    Text("Number of tasks done this week:")
                         .font(.headline)
                         .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
                     
                     HStack(alignment: .bottom, spacing: 8) {
-                        Text("\(completedChoresCount)")
+                        Text("\(completedTasksCount)")
                             .font(.system(size: 60, weight: .bold, design: .rounded))
                             .foregroundColor(colorScheme == .dark ? .white : .black)
                         
-                        if completedChoresCount == 0 {
+                        if completedTasksCount == 0 {
                             Text("u lazy or sum?")
                                 .font(.system(size: 12))
                                 .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .black.opacity(0.6))
                                 .padding(.bottom, 12)
+                            
+                        if completedTasksCount == 2 {
+                            Text("keep going")
+                                .font(.system(size: 12))
+                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .black.opacity(0.6))
+                                .padding(.bottom, 12)
+                            
+                        if completedTasksCount == 5
+                            Text("You are great!!!")
+                            .font(.system(size: 12))
+                            .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .black.opacity(0.6))
+                            .padding(.bottom, 12)
                         }
                     }
                 }
@@ -65,21 +78,21 @@ struct HomeView: View {
                 .padding(.horizontal)
                 .padding(.top)
                 
-                // Chore list with VisionOS-style design
+                // Task list with VisionOS-style design
                 List {
-                    ForEach(chores) { chore in
+                    ForEach(tasks) { task in
                         HStack {
                             VStack(alignment: .leading) {
-                                Text(chore.title)
+                                Text(task.title)
                                     .font(.headline)
                                     .foregroundColor(
-                                        chore.isCompleted ? 
+                                        task.isCompleted ? 
                                             (colorScheme == .dark ? .white.opacity(0.5) : .black.opacity(0.5)) : 
                                             (colorScheme == .dark ? .white : .black)
                                     )
-                                    .strikethrough(chore.isCompleted)
+                                    .strikethrough(task.isCompleted)
                                 
-                                if let dueDate = chore.dueDate {
+                                if let dueDate = task.dueDate {
                                     Text(dueDate, style: .date)
                                         .font(.caption)
                                         .foregroundColor(.gray)
@@ -90,9 +103,9 @@ struct HomeView: View {
                             
                             // Checkmark button
                             Button(action: {
-                                toggleChoreCompletion(chore)
+                                toggleTaskCompletion(task)
                             }) {
-                                Image(systemName: chore.isCompleted ? "checkmark.circle.fill" : "circle")
+                                Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
                                     .font(.title2)
                                     .foregroundColor(colorScheme == .dark ? .white : .black)
                                     .padding(5)
@@ -102,11 +115,11 @@ struct HomeView: View {
                             
                             // Delete button
                             Button(action: {
-                                choreToDelete = chore
+                                taskToDelete = task
                                 if settings.showDeleteConfirmation {
                                     showingDeleteAlert = true
                                 } else {
-                                    deleteChore(chore)
+                                    deleteTask(task)
                                 }
                             }) {
                                 Image(systemName: "trash.fill")
@@ -131,11 +144,11 @@ struct HomeView: View {
                 .background(Color.clear)
                 .alert(isPresented: $showingDeleteAlert) {
                     Alert(
-                        title: Text("Are you sure you want to delete this chore?"),
+                        title: Text("Are you sure you want to delete this task?"),
                         message: Text(settings.deleteConfirmationText),
                         primaryButton: .destructive(Text("Delete").foregroundColor(colorScheme == .dark ? .white : .black)) {
-                            if let choreToDelete = choreToDelete {
-                                deleteChore(choreToDelete)
+                            if let taskToDelete = taskToDelete {
+                                deleteTask(taskToDelete)
                             }
                         },
                         secondaryButton: .cancel(Text("No").foregroundColor(colorScheme == .dark ? .white : .black))
@@ -149,7 +162,7 @@ struct HomeView: View {
                 HStack {
                     Spacer()
                     Button(action: {
-                        showingAddChoreSheet = true
+                        showingAddTaskSheet = true
                     }) {
                         Image(systemName: "plus")
                             .font(.title)
@@ -167,7 +180,7 @@ struct HomeView: View {
                 }
             }
         }
-        .navigationTitle("My Chores")
+        .navigationTitle("My Tasks")
         .navigationBarItems(trailing: 
             Button(action: {
                 showingSettingsSheet = true
@@ -189,15 +202,15 @@ struct HomeView: View {
             )
             .edgesIgnoringSafeArea(.all)
         )
-        .sheet(isPresented: $showingAddChoreSheet) {
-            // Add chore sheet
+        .sheet(isPresented: $showingAddTaskSheet) {
+            // Add task sheet
             VStack(spacing: 20) {
-                Text("Add New Chore")
+                Text("Add New Task")
                     .font(.title2)
                     .fontWeight(.bold)
                     .foregroundColor(colorScheme == .dark ? .white : .black)
                 
-                TextField("Chore name", text: $newChoreTitle)
+                TextField("Task name", text: $newTaskTitle)
                     .padding()
                     .background(
                         RoundedRectangle(cornerRadius: 10)
@@ -206,12 +219,12 @@ struct HomeView: View {
                     )
                     .padding(.horizontal)
                 
-                // Add due date picker
+                // Date picker
                 DatePicker(
                     "Due Date",
                     selection: Binding(
-                        get: { newChoreDueDate ?? Date() },
-                        set: { newChoreDueDate = $0 }
+                        get: { newTaskDueDate ?? Date() },
+                        set: { newTaskDueDate = $0 }
                     ),
                     displayedComponents: [.date]
                 )
@@ -222,10 +235,24 @@ struct HomeView: View {
                 )
                 .padding(.horizontal)
                 
+                // Time picker
+                DatePicker(
+                    "Notification Time",
+                    selection: $newTaskDueTime,
+                    displayedComponents: [.hourAndMinute]
+                )
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
+                )
+                .padding(.horizontal)
+                
                 HStack(spacing: 15) {
                     Button(action: {
-                        showingAddChoreSheet = false
-                        newChoreDueDate = nil  // Reset due date
+                        showingAddTaskSheet = false
+                        newTaskDueDate = nil
+                        newTaskDueTime = Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: Date()) ?? Date()
                     }) {
                         Text("Cancel")
                             .fontWeight(.medium)
@@ -238,16 +265,17 @@ struct HomeView: View {
                     }
                     
                     Button(action: {
-                        if !newChoreTitle.isEmpty {
-                            let newChore = Chore(title: newChoreTitle, dueDate: newChoreDueDate)
-                            chores.append(newChore)
-                            if let dueDate = newChoreDueDate {
-                                scheduleNotification(for: newChore)
+                        if !newTaskTitle.isEmpty {
+                            let newTask = Chore(title: newTaskTitle, dueDate: newTaskDueDate)
+                            tasks.append(newTask)
+                            if let dueDate = newTaskDueDate {
+                                scheduleNotification(for: newTask)
                             }
-                            saveChores()
-                            newChoreTitle = ""
-                            newChoreDueDate = nil
-                            showingAddChoreSheet = false
+                            saveTasks()
+                            newTaskTitle = ""
+                            newTaskDueDate = nil
+                            newTaskDueTime = Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: Date()) ?? Date()
+                            showingAddTaskSheet = false
                         }
                     }) {
                         Text("Add")
@@ -269,7 +297,7 @@ struct HomeView: View {
             .background(
                 colorScheme == .dark ? Color.black : Color.white
             )
-            .presentationDetents([.height(350)])  // Increase height to accommodate date picker
+            .presentationDetents([.height(450)])  // Increased height to accommodate time picker
         }
         .sheet(isPresented: $showingSettingsSheet) {
             // Settings sheet
@@ -340,29 +368,29 @@ struct HomeView: View {
         }
     }
     
-    private func toggleChoreCompletion(_ chore: Chore) {
-        if let index = chores.firstIndex(where: { $0.id == chore.id }) {
-            chores[index].isCompleted.toggle()
-            saveChores()
+    private func toggleTaskCompletion(_ task: Chore) {
+        if let index = tasks.firstIndex(where: { $0.id == task.id }) {
+            tasks[index].isCompleted.toggle()
+            saveTasks()
         }
     }
     
-    private func deleteChore(_ chore: Chore) {
-        if let index = chores.firstIndex(where: { $0.id == chore.id }) {
-            removeNotification(for: chore)
-            chores.remove(at: index)
-            saveChores()
+    private func deleteTask(_ task: Chore) {
+        if let index = tasks.firstIndex(where: { $0.id == task.id }) {
+            removeNotification(for: task)
+            tasks.remove(at: index)
+            saveTasks()
         }
     }
     
-    private func saveChores() {
+    private func saveTasks() {
         do {
-            let encoded = try JSONEncoder().encode(chores)
-            UserDefaults.standard.set(encoded, forKey: "savedChores")
+            let encoded = try JSONEncoder().encode(tasks)
+            UserDefaults.standard.set(encoded, forKey: "savedTasks")
             UserDefaults.standard.synchronize()
-            print("Successfully saved \(chores.count) chores from HomeView")
+            print("Successfully saved \(tasks.count) tasks from HomeView")
         } catch {
-            print("Failed to encode chores: \(error.localizedDescription)")
+            print("Failed to encode tasks: \(error.localizedDescription)")
         }
     }
     
@@ -392,37 +420,44 @@ struct HomeView: View {
         }
     }
     
-    private func scheduleNotification(for chore: Chore) {
-        guard let dueDate = chore.dueDate else { return }
+    private func scheduleNotification(for task: Chore) {
+        guard let dueDate = task.dueDate else { return }
         
         // Request notification permission if not already granted
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
             if granted {
                 let content = UNMutableNotificationContent()
                 content.title = "Task Due Today"
-                content.body = "Don't forget to complete: \(chore.title)"
+                content.body = "Don't forget to complete: \(task.title)"
                 content.sound = .default
                 
-                // Create a date components for the due date at 9:00 AM
-                var dateComponents = Calendar.current.dateComponents([.year, .month, .day], from: dueDate)
-                dateComponents.hour = 9
-                dateComponents.minute = 0
+                // Create date components using both date and time
+                let calendar = Calendar.current
+                let dateComponents = calendar.dateComponents([.year, .month, .day], from: dueDate)
+                let timeComponents = calendar.dateComponents([.hour, .minute], from: newTaskDueTime)
                 
-                let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: false)
-                let request = UNNotificationRequest(identifier: chore.id.uuidString, content: content, trigger: trigger)
+                var finalComponents = DateComponents()
+                finalComponents.year = dateComponents.year
+                finalComponents.month = dateComponents.month
+                finalComponents.day = dateComponents.day
+                finalComponents.hour = timeComponents.hour
+                finalComponents.minute = timeComponents.minute
+                
+                let trigger = UNCalendarNotificationTrigger(dateMatching: finalComponents, repeats: false)
+                let request = UNNotificationRequest(identifier: task.id.uuidString, content: content, trigger: trigger)
                 
                 UNUserNotificationCenter.current().add(request) { error in
                     if let error = error {
                         print("Error scheduling notification: \(error.localizedDescription)")
                     } else {
-                        print("Successfully scheduled notification for task: \(chore.title)")
+                        print("Successfully scheduled notification for task: \(task.title) at \(finalComponents.hour ?? 0):\(finalComponents.minute ?? 0)")
                     }
                 }
             }
         }
     }
     
-    private func removeNotification(for chore: Chore) {
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [chore.id.uuidString])
+    private func removeNotification(for task: Chore) {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [task.id.uuidString])
     }
 } 
