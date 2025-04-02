@@ -13,6 +13,13 @@ struct HTasksApp: App {
     @StateObject private var coreDataManager = CoreDataManager.shared
     @StateObject private var notificationManager = NotificationManager.shared
     
+    init() {
+        ValueTransformer.setValueTransformer(
+            UIColorTransformer(),
+            forName: NSValueTransformerName("UIColorTransformer")
+        )
+    }
+    
     var body: some Scene {
         WindowGroup {
             ContentView()
