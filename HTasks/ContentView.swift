@@ -113,14 +113,25 @@ struct WelcomeView: View {
                 .foregroundColor(colorScheme == .dark ? .white : .black)
             
             if showDatePicker {
-                DatePicker("Due Date", selection: $dueDate, in: Date()...)
-                    .datePickerStyle(GraphicalDatePickerStyle())
-                    .padding()
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
-                    )
-                    .padding(.horizontal)
+                VStack {
+                    DatePicker("Due Date", selection: $dueDate, in: Date()...)
+                        .datePickerStyle(GraphicalDatePickerStyle())
+                        .padding()
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
+                        )
+                        .padding(.horizontal)
+                    
+                    DatePicker("Due Time", selection: $dueDate, displayedComponents: .hourAndMinute)
+                        .datePickerStyle(.compact)
+                        .padding()
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
+                        )
+                        .padding(.horizontal)
+                }
             }
             
             Button(action: {
@@ -468,14 +479,25 @@ struct HomeView: View {
                     .foregroundColor(colorScheme == .dark ? .white : .black)
                 
                 if showDatePicker {
-                    DatePicker("Due Date", selection: $newTaskDueDate, in: Date()...)
-                        .datePickerStyle(GraphicalDatePickerStyle())
-                        .padding()
-                        .background(
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
-                        )
-                        .padding(.horizontal)
+                    VStack {
+                        DatePicker("Due Date", selection: $newTaskDueDate, in: Date()...)
+                            .datePickerStyle(GraphicalDatePickerStyle())
+                            .padding()
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
+                            )
+                            .padding(.horizontal)
+                        
+                        DatePicker("Due Time", selection: $newTaskDueDate, displayedComponents: .hourAndMinute)
+                            .datePickerStyle(.compact)
+                            .padding()
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
+                            )
+                            .padding(.horizontal)
+                    }
                 }
                 
                 HStack(spacing: 15) {
@@ -526,7 +548,7 @@ struct HomeView: View {
             .background(
                 colorScheme == .dark ? Color.black : Color.white
             )
-            .presentationDetents([.height(showDatePicker ? 500 : 250)])
+            .presentationDetents([.height(showDatePicker ? 600 : 250)])
         }
         .sheet(isPresented: $showingSettingsSheet) {
             // Settings sheet
