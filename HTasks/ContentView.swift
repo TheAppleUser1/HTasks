@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-struct Chore: Identifiable, Codable {
+struct Task: Identifiable, Codable {
     var id: UUID
     var title: String
     var isCompleted = false
@@ -26,54 +26,54 @@ struct UserSettings: Codable {
 
 struct ContentView: View {
     @State private var isWelcomeActive = true
-    @State private var chores: [Chore] = []
+    @State private var tasks: [Task] = []
     @Environment(\.colorScheme) var colorScheme
     
-    // Load saved chores when the view appears
+    // Load saved tasks when the view appears
     var body: some View {
         NavigationView {
             if isWelcomeActive {
-                WelcomeView(chores: $chores, isWelcomeActive: $isWelcomeActive)
+                WelcomeView(tasks: $tasks, isWelcomeActive: $isWelcomeActive)
             } else {
-                HomeView(chores: $chores)
+                HomeView(tasks: $tasks)
             }
         }
         .navigationViewStyle(StackNavigationViewStyle())
         .onAppear {
-            loadChores()
+            loadTasks()
             
             // Check if we should skip welcome screen
             let hasSeenWelcome = UserDefaults.standard.bool(forKey: "hasSeenWelcome")
-            if hasSeenWelcome && !chores.isEmpty {
+            if hasSeenWelcome && !tasks.isEmpty {
                 isWelcomeActive = false
             }
         }
     }
     
-    private func loadChores() {
-        if let savedChores = UserDefaults.standard.data(forKey: "savedChores") {
+    private func loadTasks() {
+        if let savedTasks = UserDefaults.standard.data(forKey: "savedTasks") {
             do {
-                let decodedChores = try JSONDecoder().decode([Chore].self, from: savedChores)
-                self.chores = decodedChores
+                let decodedTasks = try JSONDecoder().decode([Task].self, from: savedTasks)
+                self.tasks = decodedTasks
                 
                 // Log for debugging
-                print("Loaded \(decodedChores.count) chores from UserDefaults")
+                print("Loaded \(decodedTasks.count) tasks from UserDefaults")
             } catch {
-                print("Failed to decode chores: \(error.localizedDescription)")
+                print("Failed to decode tasks: \(error.localizedDescription)")
             }
         } else {
-            print("No saved chores found in UserDefaults")
+            print("No saved tasks found in UserDefaults")
         }
     }
 }
 
 struct WelcomeView: View {
-    @Binding var chores: [Chore]
+    @Binding var tasks: [Task]
     @Binding var isWelcomeActive: Bool
-    @State private var newChore: String = ""
+    @State private var newTask: String = ""
     @Environment(\.colorScheme) var colorScheme
     
-    let presetChores = [
+    let presetTasks = [
         "Wash the dishes",
         "Clean the Windows",
         "Mop the Floor",
@@ -86,14 +86,14 @@ struct WelcomeView: View {
                 .font(.system(size: 40, weight: .bold, design: .rounded))
                 .foregroundColor(colorScheme == .dark ? .white : .black)
             
-            Text("Choose basic chores you want to do at home and get motivated!")
+            Text("Choose basic tasks you want to do at home and get motivated!")
                 .font(.headline)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
                 .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
             
-            // Chore input field with modern styling
-            TextField("Type your own chore", text: $newChore)
+            // Task input field with modern styling
+            TextField("Type your own task", text: $newTask)
                 .padding()
                 .background(
                     RoundedRectangle(cornerRadius: 12)
@@ -103,14 +103,14 @@ struct WelcomeView: View {
                 .foregroundColor(colorScheme == .dark ? .white : .black)
             
             Button(action: {
-                if !newChore.isEmpty {
-                    addChore(newChore)
-                    newChore = ""
+                if !newTask.isEmpty {
+                    addTask(newTask)
+                    newTask = ""
                 }
             }) {
                 HStack {
                     Image(systemName: "plus.circle.fill")
-                    Text("Add Chore")
+                    Text("Add Task")
                 }
                 .fontWeight(.semibold)
                 .padding()
@@ -132,9 +132,9 @@ struct WelcomeView: View {
                 
                 ScrollView {
                     VStack(spacing: 16) {
-                        ForEach(presetChores, id: \.self) { preset in
+                        ForEach(presetTasks, id: \.self) { preset in
                             Button(action: {
-                                addChore(preset)
+                                addTask(preset)
                             }) {
                                 HStack {
                                     Text(preset)
@@ -159,7 +159,7 @@ struct WelcomeView: View {
                 }
             }
             
-            if !chores.isEmpty {
+            if !tasks.isEmpty {
                 Button(action: {
                     isWelcomeActive = false
                     // Mark that user has seen welcome screen
@@ -199,53 +199,53 @@ struct WelcomeView: View {
         )
     }
     
-    private func addChore(_ title: String) {
-        let newChore = Chore(title: title)
-        chores.append(newChore)
-        saveChores()
+    private func addTask(_ title: String) {
+        let newTask = Task(title: title)
+        tasks.append(newTask)
+        saveTasks()
     }
     
-    private func saveChores() {
+    private func saveTasks() {
         do {
-            let encoded = try JSONEncoder().encode(chores)
-            UserDefaults.standard.set(encoded, forKey: "savedChores")
+            let encoded = try JSONEncoder().encode(tasks)
+            UserDefaults.standard.set(encoded, forKey: "savedTasks")
             UserDefaults.standard.synchronize()
-            print("Successfully saved \(chores.count) chores from WelcomeView")
+            print("Successfully saved \(tasks.count) tasks from WelcomeView")
         } catch {
-            print("Failed to encode chores: \(error.localizedDescription)")
+            print("Failed to encode tasks: \(error.localizedDescription)")
         }
     }
 }
 
 struct HomeView: View {
-    @Binding var chores: [Chore]
-    @State private var choreToDelete: Chore?
+    @Binding var tasks: [Task]
+    @State private var taskToDelete: Task?
     @State private var showingDeleteAlert = false
-    @State private var showingAddChoreSheet = false
+    @State private var showingAddTaskSheet = false
     @State private var showingSettingsSheet = false
-    @State private var newChoreTitle = ""
+    @State private var newTaskTitle = ""
     @State private var settings = UserSettings()
     @Environment(\.colorScheme) var colorScheme
     
-    var completedChoresCount: Int {
-        chores.filter { $0.isCompleted }.count
+    var completedTasksCount: Int {
+        tasks.filter { $0.isCompleted }.count
     }
     
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
-                // VisionOS style header with completed chores count
+                // VisionOS style header with completed tasks count
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Number of chores done this week:")
+                    Text("Number of tasks done this week:")
                         .font(.headline)
                         .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
                     
                     HStack(alignment: .bottom, spacing: 8) {
-                        Text("\(completedChoresCount)")
+                        Text("\(completedTasksCount)")
                             .font(.system(size: 60, weight: .bold, design: .rounded))
                             .foregroundColor(colorScheme == .dark ? .white : .black)
                         
-                        if completedChoresCount == 0 {
+                        if completedTasksCount == 0 {
                             Text("u lazy or sum?")
                                 .font(.system(size: 12))
                                 .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .black.opacity(0.6))
@@ -262,26 +262,26 @@ struct HomeView: View {
                 .padding(.horizontal)
                 .padding(.top)
                 
-                // Chore list with VisionOS-style design
+                // Task list with VisionOS-style design
                 List {
-                    ForEach(chores) { chore in
+                    ForEach(tasks) { task in
                         HStack {
-                            Text(chore.title)
+                            Text(task.title)
                                 .font(.headline)
                                 .foregroundColor(
-                                    chore.isCompleted ? 
+                                    task.isCompleted ? 
                                         (colorScheme == .dark ? .white.opacity(0.5) : .black.opacity(0.5)) : 
                                         (colorScheme == .dark ? .white : .black)
                                 )
-                                .strikethrough(chore.isCompleted)
+                                .strikethrough(task.isCompleted)
                             
                             Spacer()
                             
                             // Checkmark button
                             Button(action: {
-                                toggleChoreCompletion(chore)
+                                toggleTaskCompletion(task)
                             }) {
-                                Image(systemName: chore.isCompleted ? "checkmark.circle.fill" : "circle")
+                                Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
                                     .font(.title2)
                                     .foregroundColor(colorScheme == .dark ? .white : .black)
                                     .padding(5)
@@ -291,11 +291,11 @@ struct HomeView: View {
                             
                             // Delete button
                             Button(action: {
-                                choreToDelete = chore
+                                taskToDelete = task
                                 if settings.showDeleteConfirmation {
                                     showingDeleteAlert = true
                                 } else {
-                                    deleteChore(chore)
+                                    deleteTask(task)
                                 }
                             }) {
                                 Image(systemName: "trash.fill")
@@ -320,11 +320,11 @@ struct HomeView: View {
                 .background(Color.clear)
                 .alert(isPresented: $showingDeleteAlert) {
                     Alert(
-                        title: Text("Are you sure you want to delete this chore?"),
+                        title: Text("Are you sure you want to delete this task?"),
                         message: Text(settings.deleteConfirmationText),
                         primaryButton: .destructive(Text("Delete").foregroundColor(colorScheme == .dark ? .white : .black)) {
-                            if let choreToDelete = choreToDelete {
-                                deleteChore(choreToDelete)
+                            if let taskToDelete = taskToDelete {
+                                deleteTask(taskToDelete)
                             }
                         },
                         secondaryButton: .cancel(Text("No").foregroundColor(colorScheme == .dark ? .white : .black))
@@ -338,7 +338,7 @@ struct HomeView: View {
                 HStack {
                     Spacer()
                     Button(action: {
-                        showingAddChoreSheet = true
+                        showingAddTaskSheet = true
                     }) {
                         Image(systemName: "plus")
                             .font(.title)
@@ -356,7 +356,7 @@ struct HomeView: View {
                 }
             }
         }
-        .navigationTitle("My Chores")
+        .navigationTitle("My Tasks")
         .navigationBarItems(trailing: 
             Button(action: {
                 showingSettingsSheet = true
@@ -378,15 +378,15 @@ struct HomeView: View {
             )
             .edgesIgnoringSafeArea(.all)
         )
-        .sheet(isPresented: $showingAddChoreSheet) {
-            // Add chore sheet
+        .sheet(isPresented: $showingAddTaskSheet) {
+            // Add task sheet
             VStack(spacing: 20) {
-                Text("Add New Chore")
+                Text("Add New Task")
                     .font(.title2)
                     .fontWeight(.bold)
                     .foregroundColor(colorScheme == .dark ? .white : .black)
                 
-                TextField("Chore name", text: $newChoreTitle)
+                TextField("Task name", text: $newTaskTitle)
                     .padding()
                     .background(
                         RoundedRectangle(cornerRadius: 10)
@@ -397,7 +397,7 @@ struct HomeView: View {
                 
                 HStack(spacing: 15) {
                     Button(action: {
-                        showingAddChoreSheet = false
+                        showingAddTaskSheet = false
                     }) {
                         Text("Cancel")
                             .fontWeight(.medium)
@@ -410,12 +410,12 @@ struct HomeView: View {
                     }
                     
                     Button(action: {
-                        if !newChoreTitle.isEmpty {
-                            let newChore = Chore(title: newChoreTitle)
-                            chores.append(newChore)
-                            saveChores()
-                            newChoreTitle = ""
-                            showingAddChoreSheet = false
+                        if !newTaskTitle.isEmpty {
+                            let newTask = Task(title: newTaskTitle)
+                            tasks.append(newTask)
+                            saveTasks()
+                            newTaskTitle = ""
+                            showingAddTaskSheet = false
                         }
                     }) {
                         Text("Add")
@@ -508,28 +508,28 @@ struct HomeView: View {
         }
     }
     
-    private func toggleChoreCompletion(_ chore: Chore) {
-        if let index = chores.firstIndex(where: { $0.id == chore.id }) {
-            chores[index].isCompleted.toggle()
-            saveChores()
+    private func toggleTaskCompletion(_ task: Task) {
+        if let index = tasks.firstIndex(where: { $0.id == task.id }) {
+            tasks[index].isCompleted.toggle()
+            saveTasks()
         }
     }
     
-    private func deleteChore(_ chore: Chore) {
-        if let index = chores.firstIndex(where: { $0.id == chore.id }) {
-            chores.remove(at: index)
-            saveChores()
+    private func deleteTask(_ task: Task) {
+        if let index = tasks.firstIndex(where: { $0.id == task.id }) {
+            tasks.remove(at: index)
+            saveTasks()
         }
     }
     
-    private func saveChores() {
+    private func saveTasks() {
         do {
-            let encoded = try JSONEncoder().encode(chores)
-            UserDefaults.standard.set(encoded, forKey: "savedChores")
+            let encoded = try JSONEncoder().encode(tasks)
+            UserDefaults.standard.set(encoded, forKey: "savedTasks")
             UserDefaults.standard.synchronize()
-            print("Successfully saved \(chores.count) chores from HomeView")
+            print("Successfully saved \(tasks.count) tasks from HomeView")
         } catch {
-            print("Failed to encode chores: \(error.localizedDescription)")
+            print("Failed to encode tasks: \(error.localizedDescription)")
         }
     }
     
