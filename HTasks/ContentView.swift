@@ -6,16 +6,19 @@
 //
 
 import SwiftUI
+import UserNotifications
 
 struct Task: Identifiable, Codable {
     var id: UUID
     var title: String
     var isCompleted = false
+    var dueDate: Date?
     
-    init(id: UUID = UUID(), title: String, isCompleted: Bool = false) {
+    init(id: UUID = UUID(), title: String, isCompleted: Bool = false, dueDate: Date? = nil) {
         self.id = id
         self.title = title
         self.isCompleted = isCompleted
+        self.dueDate = dueDate
     }
 }
 
@@ -71,6 +74,8 @@ struct WelcomeView: View {
     @Binding var tasks: [Task]
     @Binding var isWelcomeActive: Bool
     @State private var newTask: String = ""
+    @State private var dueDate: Date = Date()
+    @State private var showDatePicker = false
     @Environment(\.colorScheme) var colorScheme
     
     let presetTasks = [
@@ -102,10 +107,27 @@ struct WelcomeView: View {
                 .padding(.horizontal)
                 .foregroundColor(colorScheme == .dark ? .white : .black)
             
+            // Date picker toggle
+            Toggle("Add due date", isOn: $showDatePicker)
+                .padding(.horizontal)
+                .foregroundColor(colorScheme == .dark ? .white : .black)
+            
+            if showDatePicker {
+                DatePicker("Due Date", selection: $dueDate, in: Date()...)
+                    .datePickerStyle(GraphicalDatePickerStyle())
+                    .padding()
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
+                    )
+                    .padding(.horizontal)
+            }
+            
             Button(action: {
                 if !newTask.isEmpty {
-                    addTask(newTask)
+                    addTask(newTask, withDate: showDatePicker)
                     newTask = ""
+                    showDatePicker = false
                 }
             }) {
                 HStack {
@@ -199,10 +221,53 @@ struct WelcomeView: View {
         )
     }
     
-    private func addTask(_ title: String) {
-        let newTask = Task(title: title)
+    private func addTask(_ title: String, withDate: Bool = false) {
+        let newTask = Task(title: title, dueDate: withDate ? dueDate : nil)
         tasks.append(newTask)
         saveTasks()
+        
+        if withDate {
+            scheduleNotification(for: newTask)
+        }
+    }
+    
+    private func scheduleNotification(for task: Task) {
+        guard let dueDate = task.dueDate else { return }
+        
+        // Request notification permission if not already granted
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
+            if granted {
+                // Schedule notification for the due date
+                let content = UNMutableNotificationContent()
+                content.title = "Task Due: \(task.title)"
+                content.body = "Your task is due today!"
+                content.sound = .default
+                
+                // Create trigger for the exact due date
+                let calendar = Calendar.current
+                let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: dueDate)
+                let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+                
+                // Create request
+                let request = UNNotificationRequest(identifier: task.id.uuidString, content: content, trigger: trigger)
+                
+                // Add request
+                UNUserNotificationCenter.current().add(request)
+                
+                // Schedule reminder for 1 day before
+                let reminderDate = calendar.date(byAdding: .day, value: -1, to: dueDate)!
+                let reminderComponents = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: reminderDate)
+                let reminderTrigger = UNCalendarNotificationTrigger(dateMatching: reminderComponents, repeats: false)
+                
+                let reminderContent = UNMutableNotificationContent()
+                reminderContent.title = "Task Reminder: \(task.title)"
+                reminderContent.body = "Your task is due tomorrow!"
+                reminderContent.sound = .default
+                
+                let reminderRequest = UNNotificationRequest(identifier: "\(task.id.uuidString)-reminder", content: reminderContent, trigger: reminderTrigger)
+                UNUserNotificationCenter.current().add(reminderRequest)
+            }
+        }
     }
     
     private func saveTasks() {
@@ -224,6 +289,8 @@ struct HomeView: View {
     @State private var showingAddTaskSheet = false
     @State private var showingSettingsSheet = false
     @State private var newTaskTitle = ""
+    @State private var newTaskDueDate: Date = Date()
+    @State private var showDatePicker = false
     @State private var settings = UserSettings()
     @Environment(\.colorScheme) var colorScheme
     
@@ -395,6 +462,22 @@ struct HomeView: View {
                     )
                     .padding(.horizontal)
                 
+                // Date picker toggle
+                Toggle("Add due date", isOn: $showDatePicker)
+                    .padding(.horizontal)
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                
+                if showDatePicker {
+                    DatePicker("Due Date", selection: $newTaskDueDate, in: Date()...)
+                        .datePickerStyle(GraphicalDatePickerStyle())
+                        .padding()
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
+                        )
+                        .padding(.horizontal)
+                }
+                
                 HStack(spacing: 15) {
                     Button(action: {
                         showingAddTaskSheet = false
@@ -411,10 +494,16 @@ struct HomeView: View {
                     
                     Button(action: {
                         if !newTaskTitle.isEmpty {
-                            let newTask = Task(title: newTaskTitle)
+                            let newTask = Task(title: newTaskTitle, dueDate: showDatePicker ? newTaskDueDate : nil)
                             tasks.append(newTask)
                             saveTasks()
+                            
+                            if showDatePicker {
+                                scheduleNotification(for: newTask)
+                            }
+                            
                             newTaskTitle = ""
+                            showDatePicker = false
                             showingAddTaskSheet = false
                         }
                     }) {
@@ -437,7 +526,7 @@ struct HomeView: View {
             .background(
                 colorScheme == .dark ? Color.black : Color.white
             )
-            .presentationDetents([.height(250)])
+            .presentationDetents([.height(showDatePicker ? 500 : 250)])
         }
         .sheet(isPresented: $showingSettingsSheet) {
             // Settings sheet
@@ -556,6 +645,45 @@ struct HomeView: View {
             print("Successfully saved user settings")
         } catch {
             print("Failed to encode settings: \(error.localizedDescription)")
+        }
+    }
+    
+    private func scheduleNotification(for task: Task) {
+        guard let dueDate = task.dueDate else { return }
+        
+        // Request notification permission if not already granted
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
+            if granted {
+                // Schedule notification for the due date
+                let content = UNMutableNotificationContent()
+                content.title = "Task Due: \(task.title)"
+                content.body = "Your task is due today!"
+                content.sound = .default
+                
+                // Create trigger for the exact due date
+                let calendar = Calendar.current
+                let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: dueDate)
+                let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+                
+                // Create request
+                let request = UNNotificationRequest(identifier: task.id.uuidString, content: content, trigger: trigger)
+                
+                // Add request
+                UNUserNotificationCenter.current().add(request)
+                
+                // Schedule reminder for 1 day before
+                let reminderDate = calendar.date(byAdding: .day, value: -1, to: dueDate)!
+                let reminderComponents = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: reminderDate)
+                let reminderTrigger = UNCalendarNotificationTrigger(dateMatching: reminderComponents, repeats: false)
+                
+                let reminderContent = UNMutableNotificationContent()
+                reminderContent.title = "Task Reminder: \(task.title)"
+                reminderContent.body = "Your task is due tomorrow!"
+                reminderContent.sound = .default
+                
+                let reminderRequest = UNNotificationRequest(identifier: "\(task.id.uuidString)-reminder", content: reminderContent, trigger: reminderTrigger)
+                UNUserNotificationCenter.current().add(reminderRequest)
+            }
         }
     }
 }
