@@ -115,7 +115,7 @@ struct WelcomeView: View {
             if showDatePicker {
                 VStack {
                     DatePicker("Due Date", selection: $dueDate, in: Date()...)
-                        .datePickerStyle(GraphicalDatePickerStyle())
+                        .datePickerStyle(.compact)
                         .padding()
                         .background(
                             RoundedRectangle(cornerRadius: 12)
@@ -481,7 +481,7 @@ struct HomeView: View {
                 if showDatePicker {
                     VStack {
                         DatePicker("Due Date", selection: $newTaskDueDate, in: Date()...)
-                            .datePickerStyle(GraphicalDatePickerStyle())
+                            .datePickerStyle(.compact)
                             .padding()
                             .background(
                                 RoundedRectangle(cornerRadius: 10)
@@ -548,7 +548,7 @@ struct HomeView: View {
             .background(
                 colorScheme == .dark ? Color.black : Color.white
             )
-            .presentationDetents([.height(showDatePicker ? 600 : 250)])
+            .presentationDetents([.height(showDatePicker ? 400 : 250)])
         }
         .sheet(isPresented: $showingSettingsSheet) {
             // Settings sheet
