@@ -8,23 +8,288 @@
 import SwiftUI
 import UserNotifications
 
+enum TaskPriority: String, CaseIterable, Codable {
+    case easy = "Low"
+    case medium = "Medium"
+    case difficult = "High"
+    
+    var color: Color {
+        switch self {
+        case .easy: return .green
+        case .medium: return .orange
+        case .difficult: return .red
+        }
+    }
+    
+    var icon: String {
+        switch self {
+        case .easy: return "circle.fill"
+        case .medium: return "circle.fill"
+        case .difficult: return "circle.fill"
+        }
+    }
+}
+
+enum TaskCategory: String, CaseIterable, Codable {
+    case personal = "Personal"
+    case work = "Work"
+    case shopping = "Shopping"
+    case health = "Health"
+    case education = "Education"
+    case social = "Social"
+    
+    var icon: String {
+        switch self {
+        case .personal: return "person.fill"
+        case .work: return "briefcase.fill"
+        case .shopping: return "cart.fill"
+        case .health: return "heart.fill"
+        case .education: return "book.fill"
+        case .social: return "person.2.fill"
+        }
+    }
+    
+    var color: Color {
+        switch self {
+        case .personal: return .blue
+        case .work: return .orange
+        case .shopping: return .green
+        case .health: return .red
+        case .education: return .purple
+        case .social: return .pink
+        }
+    }
+}
+
+enum AchievementType: String, Codable, CaseIterable {
+    case firstTask = "first_task"
+    case streak3 = "streak_3"
+    case streak7 = "streak_7"
+    case taskMaster = "task_master"
+    case weekendWarrior = "weekend_warrior"
+    case balancedLife = "balanced_life"
+    
+    var title: String {
+        switch self {
+        case .firstTask: return "Getting Started"
+        case .streak3: return "On a Roll"
+        case .streak7: return "Consistency Master"
+        case .taskMaster: return "Task Master"
+        case .weekendWarrior: return "Weekend Warrior"
+        case .balancedLife: return "Balanced Life"
+        }
+    }
+    
+    var description: String {
+        switch self {
+        case .firstTask: return "Complete your first task"
+        case .streak3: return "Maintain a 3-day streak"
+        case .streak7: return "Maintain a 7-day streak"
+        case .taskMaster: return "Complete 10 tasks"
+        case .weekendWarrior: return "Complete 5 tasks in a week"
+        case .balancedLife: return "Complete tasks in 3 different categories"
+        }
+    }
+    
+    var icon: String {
+        switch self {
+        case .firstTask: return "star.fill"
+        case .streak3, .streak7: return "flame.fill"
+        case .taskMaster: return "checkmark.circle.fill"
+        case .weekendWarrior: return "calendar.badge.clock"
+        case .balancedLife: return "scalemass.fill"
+        }
+    }
+    
+    func isUnlocked(stats: TaskStats) -> Bool {
+        switch self {
+        case .firstTask:
+            return stats.totalTasksCompleted >= 1
+        case .streak3:
+            return stats.currentStreak >= 3
+        case .streak7:
+            return stats.currentStreak >= 7
+        case .taskMaster:
+            return stats.totalTasksCompleted >= 10
+        case .weekendWarrior:
+            return stats.tasksCompletedThisWeek >= 5
+        case .balancedLife:
+            return stats.completedByCategory.count >= 3
+        }
+    }
+    
+    func progress(stats: TaskStats) -> (current: Int, total: Int) {
+        switch self {
+        case .firstTask:
+            return (min(stats.totalTasksCompleted, 1), 1)
+        case .streak3:
+            return (min(stats.currentStreak, 3), 3)
+        case .streak7:
+            return (min(stats.currentStreak, 7), 7)
+        case .taskMaster:
+            return (min(stats.totalTasksCompleted, 10), 10)
+        case .weekendWarrior:
+            return (min(stats.tasksCompletedThisWeek, 5), 5)
+        case .balancedLife:
+            return (min(stats.completedByCategory.count, 3), 3)
+        }
+    }
+    
+    var showsProgress: Bool {
+        switch self {
+        case .firstTask:
+            return false
+        default:
+            return true
+        }
+    }
+}
+
+struct Achievement: Identifiable, Codable {
+    let id: AchievementType
+    var isUnlocked: Bool
+    
+    var title: String { id.title }
+    var description: String { id.description }
+    var icon: String { id.icon }
+    
+    static let allAchievements: [Achievement] = AchievementType.allCases.map { type in
+        Achievement(id: type, isUnlocked: false)
+    }
+}
+
+struct TaskStats: Codable {
+    var currentStreak: Int = 0
+    var longestStreak: Int = 0
+    var totalTasksCompleted: Int = 0
+    var tasksCompletedToday: Int = 0
+    var tasksCompletedThisWeek: Int = 0
+    var completedByCategory: [TaskCategory: Int] = [:]
+    var completedByPriority: [TaskPriority: Int] = [:]
+    var lastCompletionDate: Date?
+    var achievements: [Achievement] = Achievement.allAchievements
+    
+    mutating func updateStats(for tasks: [Task]) {
+        // Reset daily and weekly stats
+        let calendar = Calendar.current
+        let now = Date()
+        
+        // Update total completed
+        totalTasksCompleted = tasks.filter { $0.isCompleted }.count
+        
+        // Update today's completed tasks
+        tasksCompletedToday = tasks.filter { task in
+            guard task.isCompleted else { return false }
+            return calendar.isDate(task.completionDate ?? now, inSameDayAs: now)
+        }.count
+        
+        // Update this week's completed tasks
+        let startOfWeek = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now))!
+        tasksCompletedThisWeek = tasks.filter { task in
+            guard task.isCompleted else { return false }
+            return calendar.isDate(task.completionDate ?? now, inSameDayAs: startOfWeek)
+        }.count
+        
+        // Update category stats
+        completedByCategory.removeAll()
+        for task in tasks where task.isCompleted {
+            completedByCategory[task.category, default: 0] += 1
+        }
+        
+        // Update priority stats
+        completedByPriority.removeAll()
+        for task in tasks where task.isCompleted {
+            completedByPriority[task.priority, default: 0] += 1
+        }
+        
+        // Update streak
+        if let lastDate = lastCompletionDate {
+            if calendar.isDate(lastDate, inSameDayAs: now) {
+                // Same day, streak continues
+            } else if calendar.isDate(lastDate, inSameDayAs: calendar.date(byAdding: .day, value: -1, to: now)!) {
+                // Yesterday, streak continues
+                currentStreak += 1
+            } else {
+                // Streak broken
+                currentStreak = tasksCompletedToday > 0 ? 1 : 0
+            }
+        } else if tasksCompletedToday > 0 {
+            // First completion
+            currentStreak = 1
+        }
+        
+        // Update longest streak
+        if currentStreak > longestStreak {
+            longestStreak = currentStreak
+        }
+        
+        // Update last completion date if there are completed tasks today
+        if tasksCompletedToday > 0 {
+            lastCompletionDate = now
+        }
+        
+        // Check and update achievements
+        for i in 0..<achievements.count {
+            let wasUnlocked = achievements[i].isUnlocked
+            achievements[i].isUnlocked = achievements[i].id.isUnlocked(stats: self)
+            if !wasUnlocked && achievements[i].isUnlocked {
+                print("Achievement \(achievements[i].title) is now unlocked") // Debug print
+            }
+        }
+    }
+}
+
 struct Task: Identifiable, Codable {
     var id: UUID
     var title: String
-    var isCompleted = false
+    var isCompleted: Bool
     var dueDate: Date?
+    var completionDate: Date?
+    var category: TaskCategory
+    var priority: TaskPriority
     
-    init(id: UUID = UUID(), title: String, isCompleted: Bool = false, dueDate: Date? = nil) {
+    init(id: UUID = UUID(), title: String, isCompleted: Bool = false, dueDate: Date? = nil, completionDate: Date? = nil, category: TaskCategory = .personal, priority: TaskPriority = .medium) {
         self.id = id
         self.title = title
         self.isCompleted = isCompleted
         self.dueDate = dueDate
+        self.completionDate = completionDate
+        self.category = category
+        self.priority = priority
     }
 }
 
 struct UserSettings: Codable {
-    var showDeleteConfirmation: Bool = true
-    var deleteConfirmationText: String = "We offer no liability if your mother gets mad :P"
+    var name: String
+    var streak: Int
+    var totalTasksCompleted: Int
+    var lastLoginDate: Date
+    var notificationsEnabled: Bool
+    var theme: String
+    var taskCategories: [TaskCategory]
+    var showDeleteConfirmation: Bool
+    var deleteConfirmationText: String
+    var stats: TaskStats
+    
+    static var defaultSettings: UserSettings {
+        UserSettings(
+            name: "User",
+            streak: 0,
+            totalTasksCompleted: 0,
+            lastLoginDate: Date(),
+            notificationsEnabled: true,
+            theme: "system",
+            taskCategories: [
+                .personal,
+                .work,
+                .shopping,
+                .health
+            ],
+            showDeleteConfirmation: true,
+            deleteConfirmationText: "Are you sure you want to delete this task?",
+            stats: TaskStats()
+        )
+    }
 }
 
 struct ContentView: View {
@@ -32,7 +297,6 @@ struct ContentView: View {
     @State private var tasks: [Task] = []
     @Environment(\.colorScheme) var colorScheme
     
-    // Load saved tasks when the view appears
     var body: some View {
         NavigationView {
             if isWelcomeActive {
@@ -73,10 +337,13 @@ struct ContentView: View {
 struct WelcomeView: View {
     @Binding var tasks: [Task]
     @Binding var isWelcomeActive: Bool
-    @State private var newTask: String = ""
+    @State private var newTaskTitle: String = ""
     @State private var dueDate: Date = Date()
     @State private var showDatePicker = false
+    @State private var settings = UserSettings.defaultSettings
     @Environment(\.colorScheme) var colorScheme
+    @State private var selectedPriority: TaskPriority = .easy
+    @State private var selectedCategory: TaskCategory = .personal
     
     let presetTasks = [
         "Wash the dishes",
@@ -86,186 +353,238 @@ struct WelcomeView: View {
     ]
     
     var body: some View {
-        VStack(spacing: 20) {
-            Text("Welcome to HTasks!")
-                .font(.system(size: 40, weight: .bold, design: .rounded))
-                .foregroundColor(colorScheme == .dark ? .white : .black)
-            
-            Text("Choose basic tasks you want to do at home and get motivated!")
-                .font(.headline)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
-                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
-            
-            // Task input field with modern styling
-            TextField("Type your own task", text: $newTask)
-                .padding()
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
-                )
-                .padding(.horizontal)
-                .foregroundColor(colorScheme == .dark ? .white : .black)
-            
-            // Date picker toggle
-            Toggle("Add due date", isOn: $showDatePicker)
-                .padding(.horizontal)
-                .foregroundColor(colorScheme == .dark ? .white : .black)
-            
-            if showDatePicker {
-                VStack {
-                    DatePicker("Due Date", selection: $dueDate, in: Date()...)
-                        .datePickerStyle(.compact)
-                        .padding()
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
-                        )
-                        .padding(.horizontal)
-                    
-                    DatePicker("Due Time", selection: $dueDate, displayedComponents: .hourAndMinute)
-                        .datePickerStyle(.compact)
-                        .padding()
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
-                        )
-                        .padding(.horizontal)
-                }
-            }
-            
-            Button(action: {
-                if !newTask.isEmpty {
-                    addTask(newTask, withDate: showDatePicker)
-                    newTask = ""
-                    showDatePicker = false
-                }
-            }) {
-                HStack {
-                    Image(systemName: "plus.circle.fill")
-                    Text("Add Task")
-                }
-                .fontWeight(.semibold)
-                .padding()
-                .frame(maxWidth: .infinity)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(colorScheme == .dark ? Color.blue.opacity(0.7) : Color.blue)
-                )
-                .foregroundColor(colorScheme == .dark ? .white : .black)
-            }
-            .padding(.horizontal)
-            
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Presets:")
-                    .font(.title2)
-                    .fontWeight(.bold)
+        ZStack {
+            VStack(spacing: 20) {
+                Text("Welcome to HTasks!")
+                    .font(.system(size: 40, weight: .bold, design: .rounded))
                     .foregroundColor(colorScheme == .dark ? .white : .black)
-                    .padding(.leading)
                 
-                ScrollView {
-                    VStack(spacing: 16) {
-                        ForEach(presetTasks, id: \.self) { preset in
-                            Button(action: {
-                                addTask(preset)
-                            }) {
-                                HStack {
-                                    Text(preset)
-                                        .font(.headline)
-                                        .foregroundColor(colorScheme == .dark ? .white : .black)
-                                    Spacer()
-                                    Image(systemName: "plus.circle.fill")
-                                        .font(.title3)
-                                        .foregroundColor(colorScheme == .dark ? .white : .black)
-                                }
-                                .padding()
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
-                                        .shadow(color: colorScheme == .dark ? Color.black.opacity(0.1) : Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
-                                )
-                                .padding(EdgeInsets(top: 2, leading: 4, bottom: 2, trailing: 4))
+                Text("Get Motivated")
+                    .font(.headline)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
+                
+                TextField("Type your own task", text: $newTaskTitle)
+                    .padding()
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
+                    )
+                    .padding(.horizontal)
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                
+                HStack {
+                    Text("Priority")
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                    Picker("Priority", selection: $selectedPriority) {
+                        ForEach([TaskPriority.easy, .medium, .difficult], id: \.self) { priority in
+                            HStack {
+                                Circle()
+                                    .fill(priority.color)
+                                    .frame(width: 10, height: 10)
+                                Text(priority.rawValue)
                             }
+                            .tag(priority)
                         }
                     }
-                    .padding(.horizontal)
+                    .pickerStyle(SegmentedPickerStyle())
                 }
-            }
-            
-            if !tasks.isEmpty {
+                .padding(.horizontal)
+                
+                HStack {
+                    Text("Category")
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                    Picker("Category", selection: $selectedCategory) {
+                        ForEach(TaskCategory.allCases, id: \.self) { category in
+                            HStack {
+                                Image(systemName: category.icon)
+                                Text(category.rawValue)
+                            }
+                            .tag(category)
+                        }
+                    }
+                    .pickerStyle(MenuPickerStyle())
+                }
+                .padding(.horizontal)
+                
+                Toggle("Add due date", isOn: $showDatePicker)
+                    .padding(.horizontal)
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                
+                if showDatePicker {
+                    DatePicker("Due Date & Time", selection: $dueDate, in: Date()...)
+                        .datePickerStyle(.compact)
+                        .padding()
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
+                        )
+                        .padding(.horizontal)
+                }
+                
                 Button(action: {
-                    isWelcomeActive = false
-                    // Mark that user has seen welcome screen
-                    UserDefaults.standard.set(true, forKey: "hasSeenWelcome")
-                    UserDefaults.standard.synchronize()
+                    if !newTaskTitle.isEmpty {
+                        addTask(newTaskTitle, withDate: showDatePicker)
+                        newTaskTitle = ""
+                        showDatePicker = false
+                    }
                 }) {
                     HStack {
-                        Text("Continue")
-                        Spacer()
-                        Image(systemName: "arrow.right")
+                        Image(systemName: "plus.circle.fill")
+                        Text("Add Task")
                     }
                     .fontWeight(.semibold)
                     .padding()
                     .frame(maxWidth: .infinity)
                     .background(
                         RoundedRectangle(cornerRadius: 12)
-                            .fill(colorScheme == .dark ? Color.green.opacity(0.7) : Color.green)
+                            .fill(colorScheme == .dark ? Color.blue.opacity(0.7) : Color.blue)
                     )
                     .foregroundColor(colorScheme == .dark ? .white : .black)
                 }
                 .padding(.horizontal)
+                
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Presets:")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                        .padding(.leading)
+                    
+                    ScrollView {
+                        VStack(spacing: 16) {
+                            ForEach(presetTasks, id: \.self) { preset in
+                                Button(action: {
+                                    addTask(preset)
+                                }) {
+                                    HStack {
+                                        Text(preset)
+                                            .font(.headline)
+                                            .foregroundColor(colorScheme == .dark ? .white : .black)
+                                        Spacer()
+                                        Image(systemName: "plus.circle.fill")
+                                            .font(.title3)
+                                            .foregroundColor(colorScheme == .dark ? .white : .black)
+                                    }
+                                    .padding()
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
+                                            .shadow(color: colorScheme == .dark ? Color.black.opacity(0.1) : Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
+                                    )
+                                    .padding(EdgeInsets(top: 2, leading: 4, bottom: 2, trailing: 4))
+                                }
+                            }
+                        }
+                        .padding(.horizontal)
+                    }
+                }
+                
+                if !tasks.isEmpty {
+                    Button(action: {
+                        isWelcomeActive = false
+                        UserDefaults.standard.set(true, forKey: "hasSeenWelcome")
+                        UserDefaults.standard.synchronize()
+                    }) {
+                        HStack {
+                            Text("Continue")
+                            Spacer()
+                            Image(systemName: "arrow.right")
+                        }
+                        .fontWeight(.semibold)
+                        .padding()
+                        .frame(maxWidth: .infinity)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(colorScheme == .dark ? Color.green.opacity(0.7) : Color.green)
+                        )
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                    }
+                    .padding(.horizontal)
+                }
+                
+                Spacer()
             }
-            
-            Spacer()
-        }
-        .navigationBarHidden(true)
-        .padding()
-        .background(
-            LinearGradient(
-                gradient: Gradient(colors: colorScheme == .dark ? 
-                                  [Color.black, Color.blue.opacity(0.2)] : 
-                                  [Color.white, Color.blue.opacity(0.1)]),
-                startPoint: .top,
-                endPoint: .bottom
+            .navigationBarHidden(true)
+            .padding()
+            .background(
+                LinearGradient(
+                    gradient: Gradient(colors: colorScheme == .dark ? 
+                                      [Color.black, Color.blue.opacity(0.2)] : 
+                                      [Color.white, Color.blue.opacity(0.1)]),
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .edgesIgnoringSafeArea(.all)
             )
-            .edgesIgnoringSafeArea(.all)
-        )
+        }
+        .onAppear {
+            loadSettings()
+        }
+    }
+    
+    private func loadSettings() {
+        if let savedSettings = UserDefaults.standard.data(forKey: "userSettings") {
+            if let decodedSettings = try? JSONDecoder().decode(UserSettings.self, from: savedSettings) {
+                self.settings = decodedSettings
+            } else {
+                self.settings = UserSettings.defaultSettings
+                saveSettings()
+            }
+        } else {
+            self.settings = UserSettings.defaultSettings
+            saveSettings()
+        }
+    }
+    
+    private func saveSettings() {
+        do {
+            let encoded = try JSONEncoder().encode(settings)
+            UserDefaults.standard.set(encoded, forKey: "userSettings")
+            UserDefaults.standard.synchronize()
+            print("Successfully saved user settings")
+        } catch {
+            print("Failed to encode settings: \(error.localizedDescription)")
+        }
     }
     
     private func addTask(_ title: String, withDate: Bool = false) {
-        let newTask = Task(title: title, dueDate: withDate ? dueDate : nil)
+        let newTask = Task(
+            title: title,
+            dueDate: withDate ? dueDate : nil,
+            completionDate: withDate ? Date() : nil,
+            category: selectedCategory,
+            priority: selectedPriority
+        )
         tasks.append(newTask)
         saveTasks()
         
         if withDate {
             scheduleNotification(for: newTask)
         }
+        
+        selectedPriority = .easy
+        selectedCategory = .personal
     }
     
     private func scheduleNotification(for task: Task) {
         guard let dueDate = task.dueDate else { return }
         
-        // Request notification permission if not already granted
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
             if granted {
-                // Schedule notification for the due date
                 let content = UNMutableNotificationContent()
                 content.title = "Task Due: \(task.title)"
                 content.body = "Your task is due today!"
                 content.sound = .default
                 
-                // Create trigger for the exact due date
                 let calendar = Calendar.current
                 let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: dueDate)
                 let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
                 
-                // Create request
                 let request = UNNotificationRequest(identifier: task.id.uuidString, content: content, trigger: trigger)
-                
-                // Add request
                 UNUserNotificationCenter.current().add(request)
                 
-                // Schedule reminder for 1 day before
                 let reminderDate = calendar.date(byAdding: .day, value: -1, to: dueDate)!
                 let reminderComponents = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: reminderDate)
                 let reminderTrigger = UNCalendarNotificationTrigger(dateMatching: reminderComponents, repeats: false)
@@ -299,11 +618,16 @@ struct HomeView: View {
     @State private var showingDeleteAlert = false
     @State private var showingAddTaskSheet = false
     @State private var showingSettingsSheet = false
+    @State private var showingAchievementsSheet = false
     @State private var newTaskTitle = ""
     @State private var newTaskDueDate: Date = Date()
     @State private var showDatePicker = false
-    @State private var settings = UserSettings()
+    @State private var settings = UserSettings.defaultSettings
+    @State private var completedAchievement: Achievement?
+    @State private var showAchievementBanner = false
     @Environment(\.colorScheme) var colorScheme
+    @State private var selectedPriority: TaskPriority = .easy
+    @State private var selectedCategory: TaskCategory = .personal
     
     var completedTasksCount: Int {
         tasks.filter { $0.isCompleted }.count
@@ -312,7 +636,6 @@ struct HomeView: View {
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
-                // VisionOS style header with completed tasks count
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Number of tasks done this week:")
                         .font(.headline)
@@ -340,49 +663,64 @@ struct HomeView: View {
                 .padding(.horizontal)
                 .padding(.top)
                 
-                // Task list with VisionOS-style design
                 List {
                     ForEach(tasks) { task in
-                        HStack {
-                            Text(task.title)
-                                .font(.headline)
-                                .foregroundColor(
-                                    task.isCompleted ? 
+                        HStack(spacing: 12) {
+                            HStack(spacing: 6) {
+                                Circle()
+                                    .fill(task.priority.color)
+                                    .frame(width: 8, height: 8)
+                                
+                                Image(systemName: task.category.icon)
+                                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
+                                    .font(.subheadline)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(task.title)
+                                    .font(.headline)
+                                    .foregroundColor(
+                                        task.isCompleted ? 
                                         (colorScheme == .dark ? .white.opacity(0.5) : .black.opacity(0.5)) : 
                                         (colorScheme == .dark ? .white : .black)
-                                )
-                                .strikethrough(task.isCompleted)
+                                    )
+                                    .strikethrough(task.isCompleted)
+                                
+                                if let dueDate = task.dueDate {
+                                    Text(dueDate, style: .time)
+                                        .font(.caption)
+                                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
+                                }
+                            }
                             
                             Spacer()
                             
-                            // Checkmark button
-                            Button(action: {
-                                toggleTaskCompletion(task)
-                            }) {
-                                Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
-                                    .font(.title2)
-                                    .foregroundColor(colorScheme == .dark ? .white : .black)
-                                    .padding(5)
-                                    .contentShape(Rectangle())
-                            }
-                            .buttonStyle(BorderlessButtonStyle())
-                            
-                            // Delete button
-                            Button(action: {
-                                taskToDelete = task
-                                if settings.showDeleteConfirmation {
-                                    showingDeleteAlert = true
-                                } else {
-                                    deleteTask(task)
+                            HStack(spacing: 8) {
+                                Button(action: {
+                                    toggleTaskCompletion(task)
+                                }) {
+                                    Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                                        .font(.title2)
+                                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                                        .contentShape(Rectangle())
                                 }
-                            }) {
-                                Image(systemName: "trash.fill")
-                                    .font(.title2)
-                                    .foregroundColor(colorScheme == .dark ? .white : .black)
-                                    .padding(5)
-                                    .contentShape(Rectangle())
+                                .buttonStyle(BorderlessButtonStyle())
+                                
+                                Button(action: {
+                                    taskToDelete = task
+                                    if settings.showDeleteConfirmation {
+                                        showingDeleteAlert = true
+                                    } else {
+                                        deleteTask(task)
+                                    }
+                                }) {
+                                    Image(systemName: "trash.fill")
+                                        .font(.title2)
+                                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(BorderlessButtonStyle())
                             }
-                            .buttonStyle(BorderlessButtonStyle())
                         }
                         .padding(.vertical, 8)
                         .listRowBackground(
@@ -410,7 +748,6 @@ struct HomeView: View {
                 }
             }
             
-            // Floating add button
             VStack {
                 Spacer()
                 HStack {
@@ -433,17 +770,38 @@ struct HomeView: View {
                     .padding(.bottom, 20)
                 }
             }
+            
+            if showAchievementBanner, let achievement = completedAchievement {
+                VStack {
+                    Spacer()
+                    AchievementBanner(achievement: achievement)
+                        .offset(y: showAchievementBanner ? 0 : 200)
+                        .animation(.spring(), value: showAchievementBanner)
+                }
+            }
         }
         .navigationTitle("My Tasks")
         .navigationBarItems(trailing: 
-            Button(action: {
-                showingSettingsSheet = true
-            }) {
-                Image(systemName: "gear")
-                    .font(.title2)
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
-                    .padding(8)
-                    .contentShape(Rectangle())
+            HStack(spacing: 16) {
+                Button(action: {
+                    showingAchievementsSheet = true
+                }) {
+                    Image(systemName: "trophy.fill")
+                        .font(.title2)
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                        .padding(8)
+                        .contentShape(Rectangle())
+                }
+                
+                Button(action: {
+                    showingSettingsSheet = true
+                }) {
+                    Image(systemName: "gear")
+                        .font(.title2)
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                        .padding(8)
+                        .contentShape(Rectangle())
+                }
             }
         )
         .background(
@@ -457,7 +815,6 @@ struct HomeView: View {
             .edgesIgnoringSafeArea(.all)
         )
         .sheet(isPresented: $showingAddTaskSheet) {
-            // Add task sheet
             VStack(spacing: 20) {
                 Text("Add New Task")
                     .font(.title2)
@@ -473,31 +830,53 @@ struct HomeView: View {
                     )
                     .padding(.horizontal)
                 
-                // Date picker toggle
+                HStack {
+                    Text("Priority")
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                    Picker("Priority", selection: $selectedPriority) {
+                        ForEach([TaskPriority.easy, .medium, .difficult], id: \.self) { priority in
+                            HStack {
+                                Circle()
+                                    .fill(priority.color)
+                                    .frame(width: 10, height: 10)
+                                Text(priority.rawValue)
+                            }
+                            .tag(priority)
+                        }
+                    }
+                    .pickerStyle(SegmentedPickerStyle())
+                }
+                .padding(.horizontal)
+                
+                HStack {
+                    Text("Category")
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                    Picker("Category", selection: $selectedCategory) {
+                        ForEach(TaskCategory.allCases, id: \.self) { category in
+                            HStack {
+                                Image(systemName: category.icon)
+                                Text(category.rawValue)
+                            }
+                            .tag(category)
+                        }
+                    }
+                    .pickerStyle(MenuPickerStyle())
+                }
+                .padding(.horizontal)
+                
                 Toggle("Add due date", isOn: $showDatePicker)
                     .padding(.horizontal)
                     .foregroundColor(colorScheme == .dark ? .white : .black)
                 
                 if showDatePicker {
-                    VStack {
-                        DatePicker("Due Date", selection: $newTaskDueDate, in: Date()...)
-                            .datePickerStyle(.compact)
-                            .padding()
-                            .background(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
-                            )
-                            .padding(.horizontal)
-                        
-                        DatePicker("Due Time", selection: $newTaskDueDate, displayedComponents: .hourAndMinute)
-                            .datePickerStyle(.compact)
-                            .padding()
-                            .background(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
-                            )
-                            .padding(.horizontal)
-                    }
+                    DatePicker("Due Date & Time", selection: $newTaskDueDate, in: Date()...)
+                        .datePickerStyle(.compact)
+                        .padding()
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
+                        )
+                        .padding(.horizontal)
                 }
                 
                 HStack(spacing: 15) {
@@ -516,14 +895,7 @@ struct HomeView: View {
                     
                     Button(action: {
                         if !newTaskTitle.isEmpty {
-                            let newTask = Task(title: newTaskTitle, dueDate: showDatePicker ? newTaskDueDate : nil)
-                            tasks.append(newTask)
-                            saveTasks()
-                            
-                            if showDatePicker {
-                                scheduleNotification(for: newTask)
-                            }
-                            
+                            addTask(newTaskTitle, withDate: showDatePicker)
                             newTaskTitle = ""
                             showDatePicker = false
                             showingAddTaskSheet = false
@@ -548,10 +920,9 @@ struct HomeView: View {
             .background(
                 colorScheme == .dark ? Color.black : Color.white
             )
-            .presentationDetents([.height(showDatePicker ? 400 : 250)])
+            .presentationDetents([.height(showDatePicker ? 450 : 350)])
         }
         .sheet(isPresented: $showingSettingsSheet) {
-            // Settings sheet
             VStack(spacing: 24) {
                 Text("Settings")
                     .font(.title)
@@ -614,6 +985,81 @@ struct HomeView: View {
             )
             .presentationDetents([.medium])
         }
+        .sheet(isPresented: $showingAchievementsSheet) {
+            VStack(spacing: 24) {
+                Text("Achievements")
+                    .font(.title)
+                    .fontWeight(.bold)
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                    .padding(.top, 20)
+                
+                List {
+                    ForEach(settings.stats.achievements) { achievement in
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 16) {
+                                Image(systemName: achievement.icon)
+                                    .font(.title2)
+                                    .foregroundColor(achievement.isUnlocked ? .yellow : .gray)
+                                    .frame(width: 40)
+                                
+                                VStack(alignment: .leading, spacing: 4) {
+                                    HStack {
+                                        Text(achievement.title)
+                                            .font(.headline)
+                                            .foregroundColor(colorScheme == .dark ? .white : .black)
+                                        
+                                        if achievement.isUnlocked {
+                                            Image(systemName: "checkmark.circle.fill")
+                                                .foregroundColor(.green)
+                                        }
+                                    }
+                                    
+                                    Text(achievement.description)
+                                        .font(.subheadline)
+                                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
+                                }
+                                
+                                Spacer()
+                            }
+                            
+                            if achievement.id.showsProgress && !achievement.isUnlocked {
+                                let progress = achievement.id.progress(stats: settings.stats)
+                                ProgressView(value: Double(progress.current), total: Double(progress.total))
+                                    .tint(achievement.isUnlocked ? .green : .blue)
+                                    .padding(.leading, 56)
+                                
+                                Text("\(progress.current)/\(progress.total)")
+                                    .font(.caption)
+                                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
+                                    .padding(.leading, 56)
+                            }
+                        }
+                        .padding(.vertical, 8)
+                        .opacity(achievement.isUnlocked ? 1.0 : 0.6)
+                    }
+                }
+                .listStyle(PlainListStyle())
+                
+                Button(action: {
+                    showingAchievementsSheet = false
+                }) {
+                    Text("Done")
+                        .fontWeight(.medium)
+                        .padding()
+                        .frame(maxWidth: .infinity)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(colorScheme == .dark ? Color.blue.opacity(0.7) : Color.blue)
+                        )
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                }
+                .padding()
+            }
+            .background(
+                colorScheme == .dark ? Color.black : Color.white
+            )
+            .presentationDetents([.medium])
+        }
         .onAppear {
             loadSettings()
         }
@@ -622,15 +1068,65 @@ struct HomeView: View {
     private func toggleTaskCompletion(_ task: Task) {
         if let index = tasks.firstIndex(where: { $0.id == task.id }) {
             tasks[index].isCompleted.toggle()
-            saveTasks()
+            tasks[index].completionDate = tasks[index].isCompleted ? Date() : nil
+            
+            if tasks[index].isCompleted {
+                UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [task.id.uuidString])
+            } else if let dueDate = task.dueDate {
+                scheduleNotification(for: task, at: dueDate)
+            }
+            
+            // Update stats and achievements
+            let previousAchievements = settings.stats.achievements
+            settings.stats.updateStats(for: tasks)
+            
+            // Check for newly completed achievements
+            for (index, achievement) in settings.stats.achievements.enumerated() {
+                if achievement.isUnlocked && !previousAchievements[index].isUnlocked {
+                    print("Achievement unlocked: \(achievement.title)") // Debug print
+                    DispatchQueue.main.async {
+                        withAnimation {
+                            completedAchievement = achievement
+                            showAchievementBanner = true
+                        }
+                        
+                        // Hide the banner after 3 seconds
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                            withAnimation {
+                                showAchievementBanner = false
+                            }
+                        }
+                    }
+                    break
+                }
+            }
+            
+            saveSettings()
         }
     }
     
-    private func deleteTask(_ task: Task) {
-        if let index = tasks.firstIndex(where: { $0.id == task.id }) {
-            tasks.remove(at: index)
-            saveTasks()
+    private func addTask(_ title: String, withDate: Bool = false) {
+        let newTask = Task(
+            title: title,
+            dueDate: withDate ? newTaskDueDate : nil,
+            completionDate: withDate ? Date() : nil,
+            category: selectedCategory,
+            priority: selectedPriority
+        )
+        tasks.append(newTask)
+        saveTasks()
+        
+        if withDate {
+            scheduleNotification(for: newTask, at: newTaskDueDate)
         }
+        
+        selectedPriority = .easy
+        selectedCategory = .personal
+    }
+    
+    private func deleteTask(_ task: Task) {
+        tasks.removeAll { $0.id == task.id }
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [task.id.uuidString])
     }
     
     private func saveTasks() {
@@ -646,16 +1142,15 @@ struct HomeView: View {
     
     private func loadSettings() {
         if let savedSettings = UserDefaults.standard.data(forKey: "userSettings") {
-            do {
-                let decodedSettings = try JSONDecoder().decode(UserSettings.self, from: savedSettings)
+            if let decodedSettings = try? JSONDecoder().decode(UserSettings.self, from: savedSettings) {
                 self.settings = decodedSettings
-                print("Loaded user settings from UserDefaults")
-            } catch {
-                print("Failed to decode settings: \(error.localizedDescription)")
+            } else {
+                self.settings = UserSettings.defaultSettings
+                saveSettings()
             }
         } else {
-            // Use default settings already initialized
-            print("No saved settings found in UserDefaults, using defaults")
+            self.settings = UserSettings.defaultSettings
+            saveSettings()
         }
     }
     
@@ -670,31 +1165,22 @@ struct HomeView: View {
         }
     }
     
-    private func scheduleNotification(for task: Task) {
-        guard let dueDate = task.dueDate else { return }
-        
-        // Request notification permission if not already granted
+    private func scheduleNotification(for task: Task, at date: Date) {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
             if granted {
-                // Schedule notification for the due date
                 let content = UNMutableNotificationContent()
                 content.title = "Task Due: \(task.title)"
                 content.body = "Your task is due today!"
                 content.sound = .default
                 
-                // Create trigger for the exact due date
                 let calendar = Calendar.current
-                let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: dueDate)
+                let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date)
                 let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
                 
-                // Create request
                 let request = UNNotificationRequest(identifier: task.id.uuidString, content: content, trigger: trigger)
-                
-                // Add request
                 UNUserNotificationCenter.current().add(request)
                 
-                // Schedule reminder for 1 day before
-                let reminderDate = calendar.date(byAdding: .day, value: -1, to: dueDate)!
+                let reminderDate = calendar.date(byAdding: .day, value: -1, to: date)!
                 let reminderComponents = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: reminderDate)
                 let reminderTrigger = UNCalendarNotificationTrigger(dateMatching: reminderComponents, repeats: false)
                 
@@ -707,6 +1193,47 @@ struct HomeView: View {
                 UNUserNotificationCenter.current().add(reminderRequest)
             }
         }
+    }
+}
+
+struct AchievementBanner: View {
+    let achievement: Achievement
+    @Environment(\.colorScheme) var colorScheme
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 12) {
+                Image(systemName: achievement.icon)
+                    .font(.title2)
+                    .foregroundColor(.yellow)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("\(achievement.title) completed!")
+                        .font(.headline)
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                    
+                    Text(achievement.description)
+                        .font(.subheadline)
+                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
+                }
+                
+                Spacer()
+                
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundColor(.green)
+                    .font(.title2)
+            }
+            .padding()
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white)
+                    .shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 2)
+            )
+        }
+        .padding(.horizontal, 20)
+        .padding(.trailing, 80)
+        .padding(.bottom, 20)
+        .edgesIgnoringSafeArea(.bottom)
     }
 }
 
