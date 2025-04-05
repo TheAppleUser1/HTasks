@@ -491,7 +491,7 @@ struct HomeView: View {
         NavigationView {
             List {
                 if !taskManager.suggestedTasks.isEmpty {
-                    Section(header: Text("Suggested Tasks")) {
+                    Section {
                         ForEach(taskManager.suggestedTasks, id: \.self) { suggestion in
                             Button(action: {
                                 selectedSuggestion = suggestion
@@ -505,13 +505,17 @@ struct HomeView: View {
                                 }
                             }
                         }
+                    } header: {
+                        Text("Suggested Tasks")
                     }
                 }
                 
-                Section(header: Text("Your Tasks")) {
+                Section {
                     ForEach(taskManager.tasks) { task in
                         TaskRow(task: task, taskManager: taskManager)
                     }
+                } header: {
+                    Text("Your Tasks")
                 }
             }
             .navigationTitle("HTasks")
@@ -817,7 +821,7 @@ class GeminiService {
     }
 }
 
-class TaskManager: ObservableObject {
+class TaskManager: ObservableObject, Sendable {
     @Published var tasks: [Task] = []
     @Published var userSettings = UserSettings.defaultSettings {
         didSet {
@@ -976,11 +980,11 @@ class TaskManager: ObservableObject {
         do {
             let context = TaskStats.calculateStats(from: tasks)
             let suggestions = try await geminiService.suggestTasks(context: context)
-            DispatchQueue.main.async {
+            await MainActor.run {
                 self.suggestedTasks = suggestions
             }
         } catch {
-            DispatchQueue.main.async {
+            await MainActor.run {
                 self.errorMessage = "Failed to generate task suggestions: \(error.localizedDescription)"
                 self.showError = true
             }
@@ -1304,44 +1308,7 @@ struct AchievementsView: View {
             List {
                 ForEach(taskManager.taskStats.achievements) { achievement in
                     Section {
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack(spacing: 16) {
-                                Image(systemName: achievement.icon)
-                                    .font(.title2)
-                                    .foregroundColor(achievement.isCompleted ? .yellow : .gray)
-                                    .frame(width: 40)
-                                
-                                VStack(alignment: .leading, spacing: 4) {
-                                    HStack {
-                                        Text(achievement.title)
-                                            .font(.headline)
-                                        
-                                        if achievement.isCompleted {
-                                            Image(systemName: "checkmark.circle.fill")
-                                                .foregroundColor(.green)
-                                        }
-                                    }
-                                    
-                                    Text(achievement.description)
-                                        .font(.subheadline)
-                                        .foregroundColor(.gray)
-                                }
-                            }
-                            
-                            if achievement.id.showsProgress && !achievement.isCompleted {
-                                let progress = achievement.id.progress(stats: taskManager.taskStats)
-                                ProgressView(value: Double(progress.current), total: Double(progress.total))
-                                    .tint(achievement.isCompleted ? .green : .blue)
-                                    .padding(.leading, 56)
-                                
-                                Text("\(progress.current)/\(progress.total)")
-                                    .font(.caption)
-                                    .foregroundColor(.gray)
-                                    .padding(.leading, 56)
-                            }
-                        }
-                        .padding(.vertical, 8)
-                        .opacity(achievement.isCompleted ? 1.0 : 0.6)
+                        AchievementRow(achievement: achievement, stats: taskManager.taskStats)
                     }
                 }
             }
@@ -1350,6 +1317,52 @@ struct AchievementsView: View {
                 dismiss()
             })
         }
+    }
+}
+
+struct AchievementRow: View {
+    let achievement: Achievement
+    let stats: TaskStats
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 16) {
+                Image(systemName: achievement.icon)
+                    .font(.title2)
+                    .foregroundColor(achievement.isCompleted ? .yellow : .gray)
+                    .frame(width: 40)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text(achievement.title)
+                            .font(.headline)
+                        
+                        if achievement.isCompleted {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                        }
+                    }
+                    
+                    Text(achievement.description)
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                }
+            }
+            
+            if achievement.id.showsProgress && !achievement.isCompleted {
+                let progress = achievement.id.progress(stats: stats)
+                ProgressView(value: Double(progress.current), total: Double(progress.total))
+                    .tint(achievement.isCompleted ? .green : .blue)
+                    .padding(.leading, 56)
+                
+                Text("\(progress.current)/\(progress.total)")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                    .padding(.leading, 56)
+            }
+        }
+        .padding(.vertical, 8)
+        .opacity(achievement.isCompleted ? 1.0 : 0.6)
     }
 }
 
