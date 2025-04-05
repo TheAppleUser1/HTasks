@@ -167,17 +167,30 @@ struct Achievement: Identifiable, Codable {
 struct TaskStats: Codable {
     var totalTasks: Int
     var completedTasks: Int
+    var totalCompletedTasks: Int { completedTasks }
     var categoryDistribution: [TaskCategory: Int]
     var priorityDistribution: [TaskPriority: Int]
+    var achievements: [Achievement]
+    var longestStreak: Int
+    var categoryStats: [TaskCategory: Int]
+    var priorityStats: [TaskPriority: Int]
     
     init(totalTasks: Int = 0,
          completedTasks: Int = 0,
          categoryDistribution: [TaskCategory: Int] = [:],
-         priorityDistribution: [TaskPriority: Int] = [:]) {
+         priorityDistribution: [TaskPriority: Int] = [:],
+         achievements: [Achievement] = [],
+         longestStreak: Int = 0,
+         categoryStats: [TaskCategory: Int] = [:],
+         priorityStats: [TaskPriority: Int] = [:]) {
         self.totalTasks = totalTasks
         self.completedTasks = completedTasks
         self.categoryDistribution = categoryDistribution
         self.priorityDistribution = priorityDistribution
+        self.achievements = achievements
+        self.longestStreak = longestStreak
+        self.categoryStats = categoryStats
+        self.priorityStats = priorityStats
     }
     
     static func calculateStats(from tasks: [Task]) -> TaskStats {
@@ -186,18 +199,80 @@ struct TaskStats: Codable {
         
         var categoryDist: [TaskCategory: Int] = [:]
         var priorityDist: [TaskPriority: Int] = [:]
+        var categoryStats: [TaskCategory: Int] = [:]
+        var priorityStats: [TaskPriority: Int] = [:]
         
         for task in tasks {
             categoryDist[task.category, default: 0] += 1
             priorityDist[task.priority, default: 0] += 1
+            
+            if task.isCompleted {
+                categoryStats[task.category, default: 0] += 1
+                priorityStats[task.priority, default: 0] += 1
+            }
+        }
+        
+        // Calculate achievements
+        var achievements: [Achievement] = []
+        for type in AchievementType.allCases {
+            let progress = type.progress(stats: TaskStats(
+                totalTasks: total,
+                completedTasks: completed,
+                categoryDistribution: categoryDist,
+                priorityDistribution: priorityDist,
+                achievements: [],
+                longestStreak: 0,
+                categoryStats: categoryStats,
+                priorityStats: priorityStats
+            ))
+            
+            achievements.append(Achievement(
+                id: type,
+                title: type.title,
+                description: type.description,
+                icon: type.icon,
+                isCompleted: progress.current >= progress.total
+            ))
+        }
+        
+        // Calculate streak
+        let sortedTasks = tasks.sorted { $0.completionDate ?? Date() < $1.completionDate ?? Date() }
+        var currentStreak = 0
+        var longestStreak = 0
+        var lastDate: Date?
+        
+        for task in sortedTasks where task.isCompleted {
+            if let completionDate = task.completionDate {
+                if let last = lastDate {
+                    let days = Calendar.current.dateComponents([.day], from: last, to: completionDate).day ?? 0
+                    if days == 1 {
+                        currentStreak += 1
+                    } else if days > 1 {
+                        currentStreak = 1
+                    }
+                } else {
+                    currentStreak = 1
+                }
+                lastDate = completionDate
+                longestStreak = max(longestStreak, currentStreak)
+            }
         }
         
         return TaskStats(
             totalTasks: total,
             completedTasks: completed,
             categoryDistribution: categoryDist,
-            priorityDistribution: priorityDist
+            priorityDistribution: priorityDist,
+            achievements: achievements,
+            longestStreak: longestStreak,
+            categoryStats: categoryStats,
+            priorityStats: priorityStats
         )
+    }
+    
+    mutating func updateStats(for tasks: [Task]) {
+        let newStats = TaskStats.calculateStats(from: tasks)
+        self = newStats
     }
 }
 
@@ -230,7 +305,6 @@ struct UserSettings: Codable {
     var preferredNotificationTime: Date
     var showDeleteConfirmation: Bool
     var deleteConfirmationText: String
-    var stats: TaskStats
     
     static var defaultSettings: UserSettings {
         UserSettings(
@@ -239,18 +313,25 @@ struct UserSettings: Codable {
             motivationLevel: 3,
             preferredNotificationTime: Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: Date()) ?? Date(),
             showDeleteConfirmation: true,
-            deleteConfirmationText: "Are you sure you want to delete this task?",
-            stats: TaskStats()
+            deleteConfirmationText: "Are you sure you want to delete this task?"
         )
     }
 }
 
 struct SetupView: View {
     @ObservedObject var taskManager: TaskManager
-    @State private var apiKey = ""
-    @State private var dailyTaskGoal = 5
-    @State private var motivationLevel = 3
-    @State private var preferredNotificationTime = Date()
+    @State private var apiKey: String
+    @State private var dailyTaskGoal: Int
+    @State private var motivationLevel: Double
+    @State private var preferredNotificationTime: Date
+    
+    init(taskManager: TaskManager) {
+        self.taskManager = taskManager
+        _apiKey = State(initialValue: taskManager.userSettings.geminiApiKey ?? "")
+        _dailyTaskGoal = State(initialValue: taskManager.userSettings.dailyTaskGoal)
+        _motivationLevel = State(initialValue: Double(taskManager.userSettings.motivationLevel))
+        _preferredNotificationTime = State(initialValue: taskManager.userSettings.preferredNotificationTime)
+    }
     
     var body: some View {
         NavigationView {
@@ -283,9 +364,9 @@ struct SetupView: View {
             }
             .navigationTitle("Setup")
             .navigationBarItems(trailing: Button("Done") {
-                taskManager.userSettings.geminiApiKey = apiKey
+                taskManager.userSettings.geminiApiKey = apiKey.isEmpty ? nil : apiKey
                 taskManager.userSettings.dailyTaskGoal = dailyTaskGoal
-                taskManager.userSettings.motivationLevel = motivationLevel
+                taskManager.userSettings.motivationLevel = Int(motivationLevel)
                 taskManager.userSettings.preferredNotificationTime = preferredNotificationTime
                 taskManager.saveSettings()
             })
@@ -294,9 +375,15 @@ struct SetupView: View {
 }
 
 struct ContentView: View {
-    @StateObject private var taskManager = TaskManager()
+    @StateObject private var taskManager: TaskManager
     @State private var isWelcomeActive = true
     @State private var showingSetupSheet = false
+    
+    init() {
+        let geminiService = GeminiService(apiKey: "")
+        let taskManager = TaskManager(geminiService: geminiService)
+        _taskManager = StateObject(wrappedValue: taskManager)
+    }
     
     var body: some View {
         Group {
@@ -732,8 +819,18 @@ class GeminiService {
 
 class TaskManager: ObservableObject {
     @Published var tasks: [Task] = []
-    @Published var userSettings = UserSettings.defaultSettings
-    @Published var taskStats = TaskStats()
+    @Published var userSettings = UserSettings.defaultSettings {
+        didSet {
+            if oldValue.geminiApiKey != userSettings.geminiApiKey {
+                updateGeminiService()
+            }
+        }
+    }
+    @Published var taskStats = TaskStats() {
+        didSet {
+            saveStats()
+        }
+    }
     @Published var showAchievementBanner = false
     @Published var completedAchievement: Achievement?
     @Published var suggestedTasks: [String] = []
@@ -741,7 +838,7 @@ class TaskManager: ObservableObject {
     @Published var errorMessage: String?
     @Published var showError = false
     
-    private let geminiService: GeminiService
+    private var geminiService: GeminiService
     private let notificationCenter = UNUserNotificationCenter.current()
     private let userDefaults = UserDefaults.standard
     
@@ -751,6 +848,12 @@ class TaskManager: ObservableObject {
         loadSettings()
         loadStats()
         checkNotificationPermission()
+    }
+    
+    private func updateGeminiService() {
+        if let apiKey = userSettings.geminiApiKey {
+            self.geminiService = GeminiService(apiKey: apiKey)
+        }
     }
     
     private func checkNotificationPermission() {
@@ -776,6 +879,7 @@ class TaskManager: ObservableObject {
         if let data = userDefaults.data(forKey: "tasks"),
            let decodedTasks = try? JSONDecoder().decode([Task].self, from: data) {
             tasks = decodedTasks
+            taskStats.updateStats(for: tasks)
         }
     }
     
@@ -785,9 +889,16 @@ class TaskManager: ObservableObject {
         }
     }
     
+    private func saveStats() {
+        if let encoded = try? JSONEncoder().encode(taskStats) {
+            userDefaults.set(encoded, forKey: "taskStats")
+        }
+    }
+    
     func addTask(_ task: Task) {
         tasks.append(task)
         saveTasks()
+        taskStats.updateStats(for: tasks)
         
         if let dueDate = task.dueDate {
             scheduleNotification(for: task, at: dueDate)
@@ -806,8 +917,6 @@ class TaskManager: ObservableObject {
             }
             
             saveTasks()
-            
-            // Update stats and check achievements
             taskStats.updateStats(for: tasks)
             checkAchievements()
         }
@@ -817,6 +926,7 @@ class TaskManager: ObservableObject {
         tasks.removeAll { $0.id == task.id }
         notificationCenter.removePendingNotificationRequests(withIdentifiers: [task.id.uuidString])
         saveTasks()
+        taskStats.updateStats(for: tasks)
     }
     
     func saveSettings() {
@@ -887,7 +997,8 @@ class TaskManager: ObservableObject {
     }
     
     private func scheduleNotification(for task: Task, at date: Date) {
-        notificationCenter.getNotificationSettings { settings in
+        notificationCenter.getNotificationSettings { [weak self] settings in
+            guard let self = self else { return }
             guard settings.authorizationStatus == .authorized else { return }
             
             let content = UNMutableNotificationContent()
@@ -901,7 +1012,8 @@ class TaskManager: ObservableObject {
             
             let request = UNNotificationRequest(identifier: task.id.uuidString, content: content, trigger: trigger)
             
-            self.notificationCenter.add(request) { error in
+            self.notificationCenter.add(request) { [weak self] error in
+                guard let self = self else { return }
                 if let error = error {
                     DispatchQueue.main.async {
                         self.errorMessage = "Failed to schedule notification: \(error.localizedDescription)"
@@ -922,7 +1034,8 @@ class TaskManager: ObservableObject {
                 
                 let reminderRequest = UNNotificationRequest(identifier: "\(task.id.uuidString)-reminder", content: reminderContent, trigger: reminderTrigger)
                 
-                self.notificationCenter.add(reminderRequest) { error in
+                self.notificationCenter.add(reminderRequest) { [weak self] error in
+                    guard let self = self else { return }
                     if let error = error {
                         DispatchQueue.main.async {
                             self.errorMessage = "Failed to schedule reminder: \(error.localizedDescription)"
@@ -1190,44 +1303,46 @@ struct AchievementsView: View {
         NavigationView {
             List {
                 ForEach(taskManager.taskStats.achievements) { achievement in
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack(spacing: 16) {
-                            Image(systemName: achievement.icon)
-                                .font(.title2)
-                                .foregroundColor(achievement.isCompleted ? .yellow : .gray)
-                                .frame(width: 40)
-                            
-                            VStack(alignment: .leading, spacing: 4) {
-                                HStack {
-                                    Text(achievement.title)
-                                        .font(.headline)
-                                    
-                                    if achievement.isCompleted {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .foregroundColor(.green)
-                                    }
-                                }
+                    Section {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 16) {
+                                Image(systemName: achievement.icon)
+                                    .font(.title2)
+                                    .foregroundColor(achievement.isCompleted ? .yellow : .gray)
+                                    .frame(width: 40)
                                 
-                                Text(achievement.description)
-                                    .font(.subheadline)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    HStack {
+                                        Text(achievement.title)
+                                            .font(.headline)
+                                        
+                                        if achievement.isCompleted {
+                                            Image(systemName: "checkmark.circle.fill")
+                                                .foregroundColor(.green)
+                                        }
+                                    }
+                                    
+                                    Text(achievement.description)
+                                        .font(.subheadline)
+                                        .foregroundColor(.gray)
+                                }
+                            }
+                            
+                            if achievement.id.showsProgress && !achievement.isCompleted {
+                                let progress = achievement.id.progress(stats: taskManager.taskStats)
+                                ProgressView(value: Double(progress.current), total: Double(progress.total))
+                                    .tint(achievement.isCompleted ? .green : .blue)
+                                    .padding(.leading, 56)
+                                
+                                Text("\(progress.current)/\(progress.total)")
+                                    .font(.caption)
                                     .foregroundColor(.gray)
+                                    .padding(.leading, 56)
                             }
                         }
-                        
-                        if achievement.id.showsProgress && !achievement.isCompleted {
-                            let progress = achievement.id.progress(stats: taskManager.taskStats)
-                            ProgressView(value: Double(progress.current), total: Double(progress.total))
-                                .tint(achievement.isCompleted ? .green : .blue)
-                                .padding(.leading, 56)
-                            
-                            Text("\(progress.current)/\(progress.total)")
-                                .font(.caption)
-                                .foregroundColor(.gray)
-                                .padding(.leading, 56)
-                        }
+                        .padding(.vertical, 8)
+                        .opacity(achievement.isCompleted ? 1.0 : 0.6)
                     }
-                    .padding(.vertical, 8)
-                    .opacity(achievement.isCompleted ? 1.0 : 0.6)
                 }
             }
             .navigationTitle("Achievements")
