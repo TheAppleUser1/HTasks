@@ -301,7 +301,7 @@ struct ContentView: View {
     var body: some View {
         Group {
             if isWelcomeActive {
-                WelcomeView(tasks: $taskManager.tasks, isWelcomeActive: $isWelcomeActive)
+                WelcomeView(tasks: $taskManager.tasks, isWelcomeActive: $isWelcomeActive, taskManager: taskManager)
             } else if taskManager.userSettings.geminiApiKey?.isEmpty ?? true {
                 SetupView(taskManager: taskManager)
             } else {
@@ -320,6 +320,13 @@ struct WelcomeView: View {
     @Binding var tasks: [Task]
     @Binding var isWelcomeActive: Bool
     @State private var showingSetupSheet = false
+    @ObservedObject var taskManager: TaskManager
+    
+    init(tasks: Binding<[Task]>, isWelcomeActive: Binding<Bool>, taskManager: TaskManager) {
+        self._tasks = tasks
+        self._isWelcomeActive = isWelcomeActive
+        self.taskManager = taskManager
+    }
     
     var body: some View {
         VStack(spacing: 30) {
@@ -355,7 +362,7 @@ struct WelcomeView: View {
         }
         .padding()
         .sheet(isPresented: $showingSetupSheet) {
-            SetupView(taskManager: TaskManager())
+            SetupView(taskManager: taskManager)
         }
     }
 }
@@ -482,6 +489,11 @@ struct HomeView: View {
             }
             .sheet(isPresented: $showingAchievementsSheet) {
                 AchievementsView(taskManager: taskManager)
+            }
+            .alert("Error", isPresented: $taskManager.showError) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(taskManager.errorMessage ?? "An unknown error occurred")
             }
         }
     }
@@ -614,20 +626,24 @@ class GeminiService {
         self.apiKey = apiKey
     }
     
-    func suggestPriority(for task: String, context: [Task]) async throws -> TaskPriority {
+    func suggestPriority(for title: String, context: TaskStats) async throws -> TaskPriority {
         let prompt = """
-        Based on the following task and context, suggest a priority level (Easy, Medium, or Difficult):
+        Based on this task title and context, suggest a priority level (Easy, Medium, or Difficult):
         
-        Task: \(task)
+        Task: \(title)
         
-        Recent tasks:
-        \(context.map { "- \($0.title) (\($0.priority.rawValue))" }.joined(separator: "\n"))
+        Context:
+        - Total tasks: \(context.totalTasks)
+        - Completed tasks: \(context.completedTasks)
+        - Category distribution: \(context.categoryDistribution)
+        - Priority distribution: \(context.priorityDistribution)
         
-        Consider the task's urgency and importance. Respond with only one word: Easy, Medium, or Difficult.
+        Consider the task's complexity, urgency, and how it fits with existing tasks.
+        Respond with only one word: Easy, Medium, or Difficult.
         """
         
         let response = try await makeRequest(prompt: prompt)
-        let priority = response.lowercased()
+        let priority = response.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         
         switch priority {
         case "easy": return .easy
@@ -637,30 +653,41 @@ class GeminiService {
         }
     }
     
-    func generateMotivationalMessage(for task: String) async throws -> String {
+    func suggestTasks(context: TaskStats) async throws -> [String] {
         let prompt = """
-        Generate a short, motivational message for a task reminder. The message should be encouraging and positive.
-        Task: \(task)
+        Based on the following task statistics, suggest 3 relevant tasks:
         
-        Respond with only the motivational message, no additional text.
-        """
+        Context:
+        - Total tasks: \(context.totalTasks)
+        - Completed tasks: \(context.completedTasks)
+        - Category distribution: \(context.categoryDistribution)
+        - Priority distribution: \(context.priorityDistribution)
         
-        return try await makeRequest(prompt: prompt)
-    }
-    
-    func suggestTasks(context: [Task]) async throws -> [String] {
-        let prompt = """
-        Based on the user's task history, suggest 3 relevant tasks they might want to add.
-        Consider their patterns and preferences.
-        
-        Recent tasks:
-        \(context.map { "- \($0.title)" }.joined(separator: "\n"))
+        Consider:
+        1. Balance across categories
+        2. Current workload
+        3. Completion patterns
         
         Respond with exactly 3 task suggestions, one per line, no additional text.
         """
         
         let response = try await makeRequest(prompt: prompt)
-        return response.components(separatedBy: "\n").filter { !$0.isEmpty }
+        return response
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .prefix(3)
+            .map { String($0) }
+    }
+    
+    func generateMotivationalMessage(for title: String) async throws -> String {
+        let prompt = """
+        Create a short, motivational message (maximum 100 characters) for this task: "\(title)"
+        The message should be encouraging and specific to the task.
+        Focus on the positive impact of completing the task.
+        """
+        
+        return try await makeRequest(prompt: prompt)
     }
     
     private func makeRequest(prompt: String) async throws -> String {
@@ -684,26 +711,22 @@ class GeminiService {
         
         request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
         
-        let (data, _) = try await URLSession.shared.data(for: request)
-        let response = try JSONDecoder().decode(GeminiResponse.self, from: data)
+        let (data, response) = try await URLSession.shared.data(for: request)
         
-        return response.candidates.first?.content.parts.first?.text ?? ""
-    }
-}
-
-struct GeminiResponse: Codable {
-    let candidates: [Candidate]
-    
-    struct Candidate: Codable {
-        let content: Content
-    }
-    
-    struct Content: Codable {
-        let parts: [Part]
-    }
-    
-    struct Part: Codable {
-        let text: String
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw NSError(domain: "GeminiService", code: -2, userInfo: [NSLocalizedDescriptionKey: "Invalid response"])
+        }
+        
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let candidates = json["candidates"] as? [[String: Any]],
+              let content = candidates.first?["content"] as? [String: Any],
+              let parts = content["parts"] as? [[String: Any]],
+              let text = parts.first?["text"] as? String else {
+            throw NSError(domain: "GeminiService", code: -3, userInfo: [NSLocalizedDescriptionKey: "Invalid response format"])
+        }
+        
+        return text
     }
 }
 
@@ -715,6 +738,8 @@ class TaskManager: ObservableObject {
     @Published var completedAchievement: Achievement?
     @Published var suggestedTasks: [String] = []
     @Published var isGeneratingSuggestions = false
+    @Published var errorMessage: String?
+    @Published var showError = false
     
     private let geminiService: GeminiService
     private let notificationCenter = UNUserNotificationCenter.current()
@@ -725,8 +750,26 @@ class TaskManager: ObservableObject {
         loadTasks()
         loadSettings()
         loadStats()
-        
-        requestNotificationPermission()
+        checkNotificationPermission()
+    }
+    
+    private func checkNotificationPermission() {
+        notificationCenter.getNotificationSettings { settings in
+            if settings.authorizationStatus == .notDetermined {
+                self.requestNotificationPermission()
+            }
+        }
+    }
+    
+    private func requestNotificationPermission() {
+        notificationCenter.requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
+            if let error = error {
+                DispatchQueue.main.async {
+                    self.errorMessage = "Failed to request notification permission: \(error.localizedDescription)"
+                    self.showError = true
+                }
+            }
+        }
     }
     
     func loadTasks() {
@@ -817,31 +860,25 @@ class TaskManager: ObservableObject {
     }
     
     func generateTaskSuggestions() async {
-        let context = TaskStats(
-            totalTasks: tasks.count,
-            completedTasks: tasks.filter { $0.isCompleted }.count,
-            categoryDistribution: Dictionary(grouping: tasks, by: { $0.category })
-                .mapValues { $0.count },
-            priorityDistribution: Dictionary(grouping: tasks, by: { $0.priority })
-                .mapValues { $0.count }
-        )
+        isGeneratingSuggestions = true
+        defer { isGeneratingSuggestions = false }
         
-        if let suggestions = try? await geminiService.suggestTasks(context: context) {
+        do {
+            let context = TaskStats.calculateStats(from: tasks)
+            let suggestions = try await geminiService.suggestTasks(context: context)
             DispatchQueue.main.async {
                 self.suggestedTasks = suggestions
+            }
+        } catch {
+            DispatchQueue.main.async {
+                self.errorMessage = "Failed to generate task suggestions: \(error.localizedDescription)"
+                self.showError = true
             }
         }
     }
     
     func suggestPriority(for title: String) async throws -> TaskPriority {
-        let context = TaskStats(
-            totalTasks: tasks.count,
-            completedTasks: tasks.filter { $0.isCompleted }.count,
-            categoryDistribution: Dictionary(grouping: tasks, by: { $0.category })
-                .mapValues { $0.count },
-            priorityDistribution: Dictionary(grouping: tasks, by: { $0.priority })
-                .mapValues { $0.count }
-        )
+        let context = TaskStats.calculateStats(from: tasks)
         return try await geminiService.suggestPriority(for: title, context: context)
     }
     
@@ -849,47 +886,51 @@ class TaskManager: ObservableObject {
         return try await geminiService.generateMotivationalMessage(for: title)
     }
     
-    private func requestNotificationPermission() {
-        notificationCenter.requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
-            if granted {
-                print("Notification permission granted")
-            } else if let error = error {
-                print("Error requesting notification permission: \(error)")
-            }
-        }
-    }
-    
     private func scheduleNotification(for task: Task, at date: Date) {
-        let content = UNMutableNotificationContent()
-        content.title = "Task Due: \(task.title)"
-        
-        if let message = task.motivationalMessage {
-            content.body = message
-        } else {
-            content.body = "Your task is due today!"
-        }
-        
-        content.sound = .default
-        
-        let calendar = Calendar.current
-        let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date)
-        let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
-        
-        let request = UNNotificationRequest(identifier: task.id.uuidString, content: content, trigger: trigger)
-        notificationCenter.add(request)
-        
-        // Schedule a reminder notification for the day before
-        if let reminderDate = calendar.date(byAdding: .day, value: -1, to: date) {
-            let reminderComponents = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: reminderDate)
-            let reminderTrigger = UNCalendarNotificationTrigger(dateMatching: reminderComponents, repeats: false)
+        notificationCenter.getNotificationSettings { settings in
+            guard settings.authorizationStatus == .authorized else { return }
             
-            let reminderContent = UNMutableNotificationContent()
-            reminderContent.title = "Task Reminder: \(task.title)"
-            reminderContent.body = "Your task is due tomorrow!"
-            reminderContent.sound = .default
+            let content = UNMutableNotificationContent()
+            content.title = "Task Due: \(task.title)"
+            content.body = task.motivationalMessage ?? "Your task is due today!"
+            content.sound = .default
             
-            let reminderRequest = UNNotificationRequest(identifier: "\(task.id.uuidString)-reminder", content: reminderContent, trigger: reminderTrigger)
-            notificationCenter.add(reminderRequest)
+            let calendar = Calendar.current
+            let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date)
+            let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+            
+            let request = UNNotificationRequest(identifier: task.id.uuidString, content: content, trigger: trigger)
+            
+            self.notificationCenter.add(request) { error in
+                if let error = error {
+                    DispatchQueue.main.async {
+                        self.errorMessage = "Failed to schedule notification: \(error.localizedDescription)"
+                        self.showError = true
+                    }
+                }
+            }
+            
+            // Schedule reminder
+            if let reminderDate = calendar.date(byAdding: .day, value: -1, to: date) {
+                let reminderComponents = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: reminderDate)
+                let reminderTrigger = UNCalendarNotificationTrigger(dateMatching: reminderComponents, repeats: false)
+                
+                let reminderContent = UNMutableNotificationContent()
+                reminderContent.title = "Task Reminder: \(task.title)"
+                reminderContent.body = "Your task is due tomorrow!"
+                reminderContent.sound = .default
+                
+                let reminderRequest = UNNotificationRequest(identifier: "\(task.id.uuidString)-reminder", content: reminderContent, trigger: reminderTrigger)
+                
+                self.notificationCenter.add(reminderRequest) { error in
+                    if let error = error {
+                        DispatchQueue.main.async {
+                            self.errorMessage = "Failed to schedule reminder: \(error.localizedDescription)"
+                            self.showError = true
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -907,6 +948,8 @@ struct AddTaskView: View {
     @State private var isGeneratingPriority = false
     @State private var isGeneratingMotivation = false
     @State private var motivationalMessage: String?
+    @State private var showError = false
+    @State private var errorMessage: String?
     
     init(taskManager: TaskManager, title: String = "") {
         self.taskManager = taskManager
@@ -922,7 +965,10 @@ struct AddTaskView: View {
                         priority = suggested
                     }
                 } catch {
-                    print("Error suggesting priority: \(error)")
+                    DispatchQueue.main.async {
+                        errorMessage = "Failed to suggest priority: \(error.localizedDescription)"
+                        showError = true
+                    }
                 }
             }
         }
@@ -962,11 +1008,16 @@ struct AddTaskView: View {
                         Task {
                             do {
                                 let suggested = try await taskManager.suggestPriority(for: title)
-                                suggestedPriority = suggested
-                                showSuggestedPriority = true
-                                priority = suggested
+                                DispatchQueue.main.async {
+                                    suggestedPriority = suggested
+                                    showSuggestedPriority = true
+                                    priority = suggested
+                                }
                             } catch {
-                                print("Error suggesting priority: \(error)")
+                                DispatchQueue.main.async {
+                                    errorMessage = "Failed to suggest priority: \(error.localizedDescription)"
+                                    showError = true
+                                }
                             }
                             isGeneratingPriority = false
                         }
@@ -1015,10 +1066,15 @@ struct AddTaskView: View {
                         Task {
                             do {
                                 if let message = try await taskManager.generateMotivationalMessage(for: title) {
-                                    motivationalMessage = message
+                                    DispatchQueue.main.async {
+                                        motivationalMessage = message
+                                    }
                                 }
                             } catch {
-                                print("Error generating motivation: \(error)")
+                                DispatchQueue.main.async {
+                                    errorMessage = "Failed to generate motivation: \(error.localizedDescription)"
+                                    showError = true
+                                }
                             }
                             isGeneratingMotivation = false
                         }
@@ -1049,6 +1105,11 @@ struct AddTaskView: View {
                 }
                 dismiss()
             })
+            .alert("Error", isPresented: $showError) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(errorMessage ?? "An unknown error occurred")
+            }
         }
     }
 }
