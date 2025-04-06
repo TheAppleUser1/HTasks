@@ -239,7 +239,7 @@ struct TaskStats: Codable {
     }
 }
 
-struct Task: Identifiable, Codable {
+struct Task: Identifiable, Codable, Equatable {
     var id: UUID
     var title: String
     var isCompleted: Bool
@@ -258,6 +258,17 @@ struct Task: Identifiable, Codable {
         self.category = category
         self.priority = priority
         self.lastModified = Date()
+    }
+    
+    static func == (lhs: Task, rhs: Task) -> Bool {
+        return lhs.id == rhs.id &&
+               lhs.title == rhs.title &&
+               lhs.isCompleted == rhs.isCompleted &&
+               lhs.dueDate == rhs.dueDate &&
+               lhs.completionDate == rhs.completionDate &&
+               lhs.category == rhs.category &&
+               lhs.priority == rhs.priority &&
+               lhs.lastModified == rhs.lastModified
     }
 }
 
