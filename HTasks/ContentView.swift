@@ -1670,7 +1670,6 @@ struct HomeView: View {
     @State private var showingAddTaskSheet = false
     @State private var showingSettingsSheet = false
     @State private var showingAchievements = false
-    @State private var showingCalendar = false
     @State private var showingInsights = false
     @State private var newTaskTitle = ""
     @State private var newTaskDueDate: Date = Date()
@@ -1903,9 +1902,6 @@ struct HomeView: View {
             }
             .navigationDestination(isPresented: $showingAchievements) {
                 AchievementsView(tasks: $tasks)
-            }
-            .navigationDestination(isPresented: $showingCalendar) {
-                CalendarView(tasks: $tasks)
             }
             .navigationDestination(isPresented: $showingInsights) {
                 TaskInsightsView(tasks: $tasks)
