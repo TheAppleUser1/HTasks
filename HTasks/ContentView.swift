@@ -917,7 +917,7 @@ struct HomeView: View {
             .background(
                 colorScheme == .dark ? Color.black : Color.white
             )
-            .presentationDetents([.height(showDatePicker ? 450 : 350)])
+            .presentationDetents([.height(showDatePicker ? 600 : 500)])
         }
         .sheet(isPresented: $showingSettingsSheet) {
             VStack(spacing: 24) {
