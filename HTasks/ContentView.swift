@@ -769,6 +769,11 @@ struct HomeView: View {
                         .padding(.leading, 20)
                         .padding(.bottom, 20)
                         
+                        if showAchievementBanner, let achievement = completedAchievement {
+                            AchievementBanner(achievement: achievement)
+                                .transition(.move(edge: .bottom))
+                        }
+                        
                         Spacer()
                         
                         Button(action: {
@@ -787,15 +792,6 @@ struct HomeView: View {
                         }
                         .padding(.trailing, 20)
                         .padding(.bottom, 20)
-                    }
-                }
-                
-                if showAchievementBanner, let achievement = completedAchievement {
-                    VStack {
-                        Spacer()
-                        AchievementBanner(achievement: achievement)
-                            .offset(y: showAchievementBanner ? 0 : 200)
-                            .animation(.spring(), value: showAchievementBanner)
                     }
                 }
             }
@@ -1228,15 +1224,18 @@ struct AchievementBanner: View {
                 Image(systemName: achievement.icon)
                     .font(.title2)
                     .foregroundColor(.yellow)
+                    .frame(width: 30)
                 
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text("\(achievement.title) completed!")
-                        .font(.headline)
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(colorScheme == .dark ? .white : .black)
+                        .lineLimit(1)
                     
                     Text(achievement.description)
-                        .font(.subheadline)
+                        .font(.system(size: 12))
                         .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
+                        .lineLimit(1)
                 }
                 
                 Spacer()
@@ -1244,8 +1243,10 @@ struct AchievementBanner: View {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundColor(.green)
                     .font(.title2)
+                    .frame(width: 30)
             }
-            .padding()
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 12)
                     .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white)
@@ -1253,9 +1254,7 @@ struct AchievementBanner: View {
             )
         }
         .padding(.horizontal, 20)
-        .padding(.trailing, 80)
         .padding(.bottom, 20)
-        .edgesIgnoringSafeArea(.bottom)
     }
 }
 
