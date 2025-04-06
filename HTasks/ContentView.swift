@@ -1224,16 +1224,16 @@ struct AchievementBanner: View {
                 Image(systemName: achievement.icon)
                     .font(.title2)
                     .foregroundColor(.yellow)
-                    .frame(width: 30)
+                    .frame(width: 40)
                 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text("\(achievement.title) completed!")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(colorScheme == .dark ? .white : .black)
                         .lineLimit(1)
                     
                     Text(achievement.description)
-                        .font(.system(size: 12))
+                        .font(.system(size: 14))
                         .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
                         .lineLimit(1)
                 }
@@ -1243,10 +1243,10 @@ struct AchievementBanner: View {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundColor(.green)
                     .font(.title2)
-                    .frame(width: 30)
+                    .frame(width: 40)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
             .background(
                 RoundedRectangle(cornerRadius: 12)
                     .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white)
