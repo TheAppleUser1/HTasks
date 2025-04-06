@@ -1381,6 +1381,129 @@ struct NavigationButtons: View {
     }
 }
 
+struct AddTaskSheet: View {
+    @Binding var isPresented: Bool
+    @Binding var tasks: [Task]
+    @State private var newTaskTitle = ""
+    @State private var newTaskDueDate: Date = Date()
+    @State private var selectedPriority: TaskPriority = .easy
+    @State private var selectedCategory: TaskCategory = .personal
+    @Environment(\.colorScheme) var colorScheme
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            Text("Add New Task")
+                .font(.title2)
+                .fontWeight(.bold)
+                .foregroundColor(colorScheme == .dark ? .white : .black)
+            
+            TextField("Task title", text: $newTaskTitle)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .padding(.horizontal)
+            
+            HStack(spacing: 15) {
+                ForEach(TaskPriority.allCases, id: \.self) { priority in
+                    Button(action: {
+                        selectedPriority = priority
+                    }) {
+                        Text(priority.rawValue)
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(selectedPriority == priority ? priority.color : Color.clear)
+                            )
+                            .foregroundColor(selectedPriority == priority ? .white : priority.color)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(priority.color, lineWidth: 1)
+                            )
+                    }
+                }
+            }
+            .padding(.horizontal)
+            
+            HStack(spacing: 15) {
+                ForEach(TaskCategory.allCases, id: \.self) { category in
+                    Button(action: {
+                        selectedCategory = category
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: category.icon)
+                            Text(category.rawValue)
+                        }
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(selectedCategory == category ? category.color : Color.clear)
+                        )
+                        .foregroundColor(selectedCategory == category ? .white : category.color)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(category.color, lineWidth: 1)
+                        )
+                    }
+                }
+            }
+            .padding(.horizontal)
+            
+            DatePicker("Due Date & Time", selection: $newTaskDueDate, in: Date()...)
+                .datePickerStyle(.compact)
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
+                )
+                .padding(.horizontal)
+            
+            Button(action: {
+                let newTask = Task(
+                    title: newTaskTitle,
+                    priority: selectedPriority,
+                    category: selectedCategory,
+                    dueDate: newTaskDueDate
+                )
+                tasks.append(newTask)
+                saveTasks()
+                isPresented = false
+                newTaskTitle = ""
+                newTaskDueDate = Date()
+            }) {
+                Text("Add Task")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(Color.blue)
+                    )
+            }
+            .padding(.horizontal)
+            .disabled(newTaskTitle.isEmpty)
+        }
+        .padding()
+        .background(
+            colorScheme == .dark ? Color.black : Color.white
+        )
+    }
+    
+    private func saveTasks() {
+        do {
+            let encoded = try JSONEncoder().encode(tasks)
+            UserDefaults.standard.set(encoded, forKey: "savedTasks")
+            UserDefaults.standard.synchronize()
+        } catch {
+            print("Failed to encode tasks: \(error.localizedDescription)")
+        }
+    }
+}
+
 struct HomeView: View {
     @Binding var tasks: [Task]
     @State private var taskToDelete: Task?
@@ -1500,106 +1623,7 @@ struct HomeView: View {
             TaskInsightsView(tasks: $tasks)
         }
         .sheet(isPresented: $showingAddTaskSheet) {
-            VStack(spacing: 20) {
-                Text("Add New Task")
-                    .font(.title2)
-                    .fontWeight(.bold)
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
-                
-                TextField("Task title", text: $newTaskTitle)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .padding(.horizontal)
-                
-                HStack(spacing: 15) {
-                    ForEach(TaskPriority.allCases, id: \.self) { priority in
-                        Button(action: {
-                            selectedPriority = priority
-                        }) {
-                            Text(priority.rawValue)
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .fill(selectedPriority == priority ? priority.color : Color.clear)
-                                )
-                                .foregroundColor(selectedPriority == priority ? .white : priority.color)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(priority.color, lineWidth: 1)
-                                )
-                        }
-                    }
-                }
-                .padding(.horizontal)
-                
-                HStack(spacing: 15) {
-                    ForEach(TaskCategory.allCases, id: \.self) { category in
-                        Button(action: {
-                            selectedCategory = category
-                        }) {
-                            HStack(spacing: 4) {
-                                Image(systemName: category.icon)
-                                Text(category.rawValue)
-                            }
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(selectedCategory == category ? category.color : Color.clear)
-                            )
-                            .foregroundColor(selectedCategory == category ? .white : category.color)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .stroke(category.color, lineWidth: 1)
-                            )
-                        }
-                    }
-                }
-                .padding(.horizontal)
-                
-                DatePicker("Due Date & Time", selection: $newTaskDueDate, in: Date()...)
-                    .datePickerStyle(.compact)
-                    .padding()
-                    .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
-                    )
-                    .padding(.horizontal)
-                
-                Button(action: {
-                    let newTask = Task(
-                        title: newTaskTitle,
-                        priority: selectedPriority,
-                        category: selectedCategory,
-                        dueDate: newTaskDueDate
-                    )
-                    tasks.append(newTask)
-                    saveTasks()
-                    showingAddTaskSheet = false
-                    newTaskTitle = ""
-                    newTaskDueDate = Date()
-                }) {
-                    Text("Add Task")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(Color.blue)
-                        )
-                }
-                .padding(.horizontal)
-                .disabled(newTaskTitle.isEmpty)
-            }
-            .padding()
-            .background(
-                colorScheme == .dark ? Color.black : Color.white
-            )
+            AddTaskSheet(isPresented: $showingAddTaskSheet, tasks: $tasks)
         }
         .sheet(isPresented: $showingSettingsSheet) {
             VStack(spacing: 24) {
