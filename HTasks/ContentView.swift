@@ -809,14 +809,14 @@ struct HomeView: View {
             }
         })
         .sheet(isPresented: $showingAddTaskSheet) {
-            VStack(spacing: 24) {
+            VStack(spacing: 16) {
                 Text("Add New Task")
                     .font(.title)
                     .fontWeight(.bold)
                     .foregroundColor(colorScheme == .dark ? .white : .black)
                     .padding(.top, 20)
                 
-                VStack(spacing: 20) {
+                VStack(spacing: 16) {
                     TextField("Task name", text: $newTaskTitle)
                         .padding()
                         .background(
@@ -917,7 +917,7 @@ struct HomeView: View {
             .background(
                 colorScheme == .dark ? Color.black : Color.white
             )
-            .presentationDetents([.height(showDatePicker ? 600 : 500)])
+            .presentationDetents([.height(showDatePicker ? 500 : 400)])
         }
         .sheet(isPresented: $showingSettingsSheet) {
             VStack(spacing: 24) {
