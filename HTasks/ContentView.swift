@@ -638,13 +638,13 @@ struct HomeView: View {
         NavigationStack {
             ZStack {
                 VStack(spacing: 0) {
-                    TaskCompletionHeader(completedTasksCount: completedTasksCount)
+                    TaskCompletionHeader(title: "Completed Tasks", count: completedTasksCount)
                     
                     List {
                         ForEach(tasks) { task in
                             TaskListRow(
                                 task: task,
-                                onToggleCompletion: { toggleTaskCompletion(task) },
+                                onToggleComplete: { toggleTaskCompletion(task) },
                                 onDelete: {
                                     taskToDelete = task
                                     if settings.showDeleteConfirmation {
@@ -925,6 +925,277 @@ struct AchievementBanner: View {
         .padding(.trailing, 80)
         .padding(.bottom, 20)
         .edgesIgnoringSafeArea(.bottom)
+    }
+}
+
+struct TaskListRow: View {
+    let task: Task
+    let onToggleComplete: () -> Void
+    let onDelete: () -> Void
+    
+    var body: some View {
+        HStack {
+            Button(action: onToggleComplete) {
+                Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                    .foregroundColor(task.isCompleted ? .green : .gray)
+            }
+            
+            VStack(alignment: .leading) {
+                Text(task.title)
+                    .strikethrough(task.isCompleted)
+                    .foregroundColor(task.isCompleted ? .gray : .primary)
+                
+                if let dueDate = task.dueDate {
+                    Text(dueDate, style: .date)
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+            }
+            
+            Spacer()
+            
+            Image(systemName: task.category.icon)
+                .foregroundColor(task.priority.color)
+            
+            Button(action: onDelete) {
+                Image(systemName: "trash")
+                    .foregroundColor(.red)
+            }
+        }
+        .padding(.vertical, 8)
+    }
+}
+
+struct TaskCompletionHeader: View {
+    let title: String
+    let count: Int
+    
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(.headline)
+            Spacer()
+            Text("\(count)")
+                .font(.subheadline)
+                .foregroundColor(.gray)
+        }
+        .padding(.vertical, 8)
+    }
+}
+
+struct AddTaskSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var tasks: [Task]
+    @State private var title = ""
+    @State private var selectedPriority: TaskPriority = .medium
+    @State private var selectedCategory: TaskCategory = .personal
+    @State private var dueDate: Date?
+    @State private var showDatePicker = false
+    
+    var body: some View {
+        NavigationView {
+            Form {
+                Section(header: Text("Task Details")) {
+                    TextField("Task Title", text: $title)
+                    
+                    Picker("Priority", selection: $selectedPriority) {
+                        ForEach(TaskPriority.allCases, id: \.self) { priority in
+                            Text(priority.rawValue).tag(priority)
+                        }
+                    }
+                    
+                    Picker("Category", selection: $selectedCategory) {
+                        ForEach(TaskCategory.allCases, id: \.self) { category in
+                            Label(category.rawValue, systemImage: category.icon).tag(category)
+                        }
+                    }
+                }
+                
+                Section(header: Text("Due Date")) {
+                    Toggle("Set Due Date", isOn: $showDatePicker)
+                    if showDatePicker {
+                        DatePicker("Due Date", selection: Binding(
+                            get: { dueDate ?? Date() },
+                            set: { dueDate = $0 }
+                        ), displayedComponents: .date)
+                    }
+                }
+            }
+            .navigationTitle("Add New Task")
+            .navigationBarItems(
+                leading: Button("Cancel") {
+                    dismiss()
+                },
+                trailing: Button("Add") {
+                    let newTask = Task(
+                        title: title,
+                        isCompleted: false,
+                        priority: selectedPriority,
+                        category: selectedCategory,
+                        dueDate: showDatePicker ? dueDate : nil
+                    )
+                    tasks.append(newTask)
+                    dismiss()
+                }
+                .disabled(title.isEmpty)
+            )
+        }
+    }
+}
+
+struct SettingsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @AppStorage("notificationsEnabled") private var notificationsEnabled = false
+    
+    var body: some View {
+        NavigationView {
+            Form {
+                Section(header: Text("Notifications")) {
+                    Toggle("Enable Notifications", isOn: $notificationsEnabled)
+                }
+                
+                Section(header: Text("About")) {
+                    HStack {
+                        Text("Version")
+                        Spacer()
+                        Text("1.0.0")
+                            .foregroundColor(.gray)
+                    }
+                }
+            }
+            .navigationTitle("Settings")
+            .navigationBarItems(trailing: Button("Done") {
+                dismiss()
+            })
+        }
+    }
+}
+
+struct StatisticsView: View {
+    let tasks: [Task]
+    
+    private var completedTasks: Int {
+        tasks.filter { $0.isCompleted }.count
+    }
+    
+    private var completionRate: Double {
+        guard !tasks.isEmpty else { return 0 }
+        return Double(completedTasks) / Double(tasks.count)
+    }
+    
+    var body: some View {
+        NavigationView {
+            List {
+                Section(header: Text("Overview")) {
+                    StatRow(title: "Total Tasks", value: "\(tasks.count)")
+                    StatRow(title: "Completed Tasks", value: "\(completedTasks)")
+                    StatRow(title: "Completion Rate", value: "\(Int(completionRate * 100))%")
+                }
+                
+                Section(header: Text("By Priority")) {
+                    ForEach(TaskPriority.allCases, id: \.self) { priority in
+                        let count = tasks.filter { $0.priority == priority }.count
+                        StatRow(title: priority.rawValue, value: "\(count)")
+                    }
+                }
+                
+                Section(header: Text("By Category")) {
+                    ForEach(TaskCategory.allCases, id: \.self) { category in
+                        let count = tasks.filter { $0.category == category }.count
+                        StatRow(title: category.rawValue, value: "\(count)")
+                    }
+                }
+            }
+            .navigationTitle("Statistics")
+        }
+    }
+}
+
+struct StatRow: View {
+    let title: String
+    let value: String
+    
+    var body: some View {
+        HStack {
+            Text(title)
+            Spacer()
+            Text(value)
+                .foregroundColor(.gray)
+        }
+    }
+}
+
+struct AchievementsView: View {
+    let tasks: [Task]
+    
+    private var achievements: [Achievement] {
+        var achievements: [Achievement] = []
+        
+        // First Task Achievement
+        if tasks.count >= 1 {
+            achievements.append(Achievement(
+                title: "Getting Started",
+                description: "Created your first task",
+                isUnlocked: true
+            ))
+        }
+        
+        // Task Master Achievement
+        if tasks.count >= 10 {
+            achievements.append(Achievement(
+                title: "Task Master",
+                description: "Created 10 tasks",
+                isUnlocked: true
+            ))
+        }
+        
+        // Completionist Achievement
+        if tasks.filter({ $0.isCompleted }).count >= 5 {
+            achievements.append(Achievement(
+                title: "Completionist",
+                description: "Completed 5 tasks",
+                isUnlocked: true
+            ))
+        }
+        
+        return achievements
+    }
+    
+    var body: some View {
+        NavigationView {
+            List(achievements) { achievement in
+                AchievementRow(achievement: achievement)
+            }
+            .navigationTitle("Achievements")
+        }
+    }
+}
+
+struct Achievement: Identifiable {
+    let id = UUID()
+    let title: String
+    let description: String
+    let isUnlocked: Bool
+}
+
+struct AchievementRow: View {
+    let achievement: Achievement
+    
+    var body: some View {
+        HStack {
+            Image(systemName: achievement.isUnlocked ? "trophy.fill" : "trophy")
+                .foregroundColor(achievement.isUnlocked ? .yellow : .gray)
+                .font(.title2)
+            
+            VStack(alignment: .leading) {
+                Text(achievement.title)
+                    .font(.headline)
+                Text(achievement.description)
+                    .font(.subheadline)
+                    .foregroundColor(.gray)
+            }
+        }
+        .padding(.vertical, 8)
     }
 }
 
