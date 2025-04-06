@@ -734,6 +734,16 @@ struct HomeView: View {
                 .listStyle(PlainListStyle())
                 .background(Color.clear)
             }
+            .background(
+                LinearGradient(
+                    gradient: Gradient(colors: colorScheme == .dark ? 
+                                      [Color.black, Color.blue.opacity(0.2)] : 
+                                      [Color.white, Color.blue.opacity(0.1)]),
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .edgesIgnoringSafeArea(.all)
+            )
             
             VStack {
                 Spacer()
