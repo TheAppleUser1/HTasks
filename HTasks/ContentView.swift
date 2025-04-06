@@ -278,10 +278,10 @@ struct TaskStats: Codable {
 
 struct Task: Identifiable, Codable {
     let id: UUID
-    let title: String
-    let priority: TaskPriority
-    let category: TaskCategory
-    let dueDate: Date?
+    var title: String
+    var priority: TaskPriority
+    var category: TaskCategory
+    var dueDate: Date?
     var isCompleted: Bool
     var completionDate: Date?
     var motivationalMessage: String?
@@ -665,6 +665,16 @@ final class TaskManager: ObservableObject, @unchecked Sendable {
         checkNotificationPermission()
     }
     
+    func reportError(_ message: String) {
+        queue.async { [weak self] in
+            guard let self = self else { return }
+            DispatchQueue.main.async {
+                self.errorMessage = message
+                self.showError = true
+            }
+        }
+    }
+    
     private func checkNotificationPermission() {
         notificationCenter.getNotificationSettings { [weak self] settings in
             guard let self = self else { return }
@@ -678,27 +688,27 @@ final class TaskManager: ObservableObject, @unchecked Sendable {
         notificationCenter.requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
             if let error = error {
                 DispatchQueue.main.async {
-                    self.errorMessage = "Failed to request notification permission: \(error.localizedDescription)"
-                    self.showError = true
+                    self.reportError("Failed to request notification permission: \(error.localizedDescription)")
                 }
             }
         }
     }
     
-    func loadTasks() {
+    private func loadTasks() {
         queue.async { [weak self] in
             guard let self = self else { return }
             if let data = userDefaults.data(forKey: "tasks"),
                let decodedTasks = try? JSONDecoder().decode([Task].self, from: data) {
                 DispatchQueue.main.async {
-                    self.tasks = decodedTasks
-                    self.taskStats.updateStats(for: decodedTasks)
+                    let newTasks = decodedTasks
+                    self.tasks = newTasks
+                    self.taskStats.updateStats(for: newTasks)
                 }
             }
         }
     }
     
-    func saveTasks() {
+    private func saveTasks() {
         queue.async { [weak self] in
             guard let self = self else { return }
             if let encoded = try? JSONEncoder().encode(self.tasks) {
@@ -720,9 +730,11 @@ final class TaskManager: ObservableObject, @unchecked Sendable {
         queue.async { [weak self] in
             guard let self = self else { return }
             DispatchQueue.main.async {
-                self.tasks.append(task)
+                var newTasks = self.tasks
+                newTasks.append(task)
+                self.tasks = newTasks
                 self.saveTasks()
-                self.taskStats.updateStats(for: self.tasks)
+                self.taskStats.updateStats(for: newTasks)
                 
                 if let dueDate = task.dueDate {
                     self.scheduleNotification(for: task, at: dueDate)
@@ -736,17 +748,21 @@ final class TaskManager: ObservableObject, @unchecked Sendable {
             guard let self = self else { return }
             DispatchQueue.main.async {
                 if let index = self.tasks.firstIndex(where: { $0.id == task.id }) {
-                    self.tasks[index].isCompleted.toggle()
-                    self.tasks[index].completionDate = self.tasks[index].isCompleted ? Date() : nil
+                    var newTasks = self.tasks
+                    var updatedTask = newTasks[index]
+                    updatedTask.isCompleted.toggle()
+                    updatedTask.completionDate = updatedTask.isCompleted ? Date() : nil
+                    newTasks[index] = updatedTask
+                    self.tasks = newTasks
                     
-                    if self.tasks[index].isCompleted {
+                    if updatedTask.isCompleted {
                         self.notificationCenter.removePendingNotificationRequests(withIdentifiers: [task.id.uuidString])
                     } else if let dueDate = task.dueDate {
                         self.scheduleNotification(for: task, at: dueDate)
                     }
                     
                     self.saveTasks()
-                    self.taskStats.updateStats(for: self.tasks)
+                    self.taskStats.updateStats(for: newTasks)
                     self.checkAchievements()
                 }
             }
@@ -757,10 +773,30 @@ final class TaskManager: ObservableObject, @unchecked Sendable {
         queue.async { [weak self] in
             guard let self = self else { return }
             DispatchQueue.main.async {
-                self.tasks.removeAll { $0.id == task.id }
+                let newTasks = self.tasks.filter { $0.id != task.id }
+                self.tasks = newTasks
                 self.notificationCenter.removePendingNotificationRequests(withIdentifiers: [task.id.uuidString])
                 self.saveTasks()
-                self.taskStats.updateStats(for: self.tasks)
+                self.taskStats.updateStats(for: newTasks)
+            }
+        }
+    }
+    
+    func updateTask(_ task: Task) {
+        queue.async { [weak self] in
+            guard let self = self else { return }
+            DispatchQueue.main.async {
+                if let index = self.tasks.firstIndex(where: { $0.id == task.id }) {
+                    var newTasks = self.tasks
+                    newTasks[index] = task
+                    self.tasks = newTasks
+                    self.saveTasks()
+                    self.taskStats.updateStats(for: newTasks)
+                    
+                    if let dueDate = task.dueDate {
+                        self.scheduleNotification(for: task, at: dueDate)
+                    }
+                }
             }
         }
     }
@@ -805,15 +841,31 @@ final class TaskManager: ObservableObject, @unchecked Sendable {
         // Check for newly completed achievements
         for achievement in taskStats.achievements {
             if achievement.isCompleted && !previousAchievements.contains(where: { $0.id == achievement.id && $0.isCompleted }) {
-                DispatchQueue.main.async {
-                    self.completedAchievement = achievement
-                    self.showAchievementBanner = true
-                    
-                    // Hide banner after 3 seconds
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                        self.showAchievementBanner = false
-                    }
+                showAchievement(achievement)
+            }
+        }
+    }
+    
+    func showAchievement(_ achievement: Achievement) {
+        queue.async { [weak self] in
+            guard let self = self else { return }
+            DispatchQueue.main.async {
+                self.completedAchievement = achievement
+                self.showAchievementBanner = true
+                
+                // Hide banner after 3 seconds
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                    self.hideAchievementBanner()
                 }
+            }
+        }
+    }
+    
+    func hideAchievementBanner() {
+        queue.async { [weak self] in
+            guard let self = self else { return }
+            DispatchQueue.main.async {
+                self.showAchievementBanner = false
             }
         }
     }
@@ -838,8 +890,7 @@ final class TaskManager: ObservableObject, @unchecked Sendable {
                 guard let self = self else { return }
                 if let error = error {
                     DispatchQueue.main.async {
-                        self.errorMessage = "Failed to schedule notification: \(error.localizedDescription)"
-                        self.showError = true
+                        self.reportError("Failed to schedule notification: \(error.localizedDescription)")
                     }
                 }
             }
@@ -860,8 +911,7 @@ final class TaskManager: ObservableObject, @unchecked Sendable {
                     guard let self = self else { return }
                     if let error = error {
                         DispatchQueue.main.async {
-                            self.errorMessage = "Failed to schedule reminder: \(error.localizedDescription)"
-                            self.showError = true
+                            self.reportError("Failed to schedule reminder: \(error.localizedDescription)")
                         }
                     }
                 }
