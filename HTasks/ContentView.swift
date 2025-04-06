@@ -752,7 +752,25 @@ struct HomeView: View {
                 VStack {
                     Spacer()
                     HStack {
+                        Button(action: {
+                            showingStatisticsSheet = true
+                        }) {
+                            Image(systemName: "chart.bar.fill")
+                                .font(.title)
+                                .fontWeight(.bold)
+                                .foregroundColor(colorScheme == .dark ? .black : .white)
+                                .frame(width: 60, height: 60)
+                                .background(
+                                    Circle()
+                                        .fill(colorScheme == .dark ? .white : .black)
+                                        .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
+                                )
+                        }
+                        .padding(.leading, 20)
+                        .padding(.bottom, 20)
+                        
                         Spacer()
+                        
                         Button(action: {
                             showingAddTaskSheet = true
                         }) {
@@ -784,16 +802,6 @@ struct HomeView: View {
             .navigationTitle("My Tasks")
             .navigationBarItems(trailing:
                 HStack(spacing: 16) {
-                    Button(action: {
-                        showingStatisticsSheet = true
-                    }) {
-                        Image(systemName: "chart.bar.fill")
-                            .font(.title2)
-                            .foregroundColor(colorScheme == .dark ? .white : .black)
-                            .padding(8)
-                            .contentShape(Rectangle())
-                    }
-                    
                     Button(action: {
                         showingAchievementsSheet = true
                     }) {
