@@ -611,7 +611,6 @@ struct WelcomeView: View {
             priority: selectedPriority
         )
         tasks.append(newTask)
-        saveTasks(tasks)
         
         if withDate {
             scheduleNotification(for: newTask)
