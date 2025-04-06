@@ -1411,6 +1411,7 @@ struct AddTaskSheet: View {
     @Binding var tasks: [Task]
     @State private var newTaskTitle = ""
     @State private var newTaskDueDate: Date = Date()
+    @State private var showDatePicker = false
     @State private var selectedPriority: TaskPriority = .easy
     @State private var selectedCategory: TaskCategory = .personal
     @Environment(\.colorScheme) var colorScheme
@@ -1523,7 +1524,7 @@ struct AddTaskSheet: View {
     private func addTask(_ title: String, withDate: Bool = false) {
         let newTask = Task(
             title: title,
-            dueDate: withDate ? dueDate : nil,
+            dueDate: withDate ? newTaskDueDate : nil,
             completionDate: withDate ? Date() : nil,
             category: selectedCategory,
             priority: selectedPriority
