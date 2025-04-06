@@ -207,7 +207,7 @@ struct TaskStats: Codable {
         if let lastDate = lastCompletionDate {
             if calendar.isDate(lastDate, inSameDayAs: now) {
                 // Same day, streak continues
-            } else if calendar.isDate(lastDate, inSameAs: calendar.date(byAdding: .day, value: -1, to: now)!) {
+            } else if calendar.isDate(lastDate, inSameDayAs: calendar.date(byAdding: .day, value: -1, to: now)!) {
                 // Yesterday, streak continues
                 currentStreak += 1
             } else {
@@ -867,21 +867,6 @@ struct CalendarView: View {
                     .pickerStyle(MenuPickerStyle())
                 }
                 .padding(.horizontal)
-                
-                Toggle("Add due date", isOn: $showDatePicker)
-                    .padding(.horizontal)
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
-                
-                if showDatePicker {
-                    DatePicker("Due Date & Time", selection: $newTaskDueDate, in: Date()...)
-                        .datePickerStyle(.compact)
-                        .padding()
-                        .background(
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
-                        )
-                        .padding(.horizontal)
-                }
                 
                 HStack(spacing: 15) {
                     Button(action: {
