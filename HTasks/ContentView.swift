@@ -1230,15 +1230,12 @@ struct AchievementBanner: View {
                     Text("\(achievement.title) completed!")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(colorScheme == .dark ? .white : .black)
-                        .lineLimit(1)
                     
                     Text(achievement.description)
                         .font(.system(size: 14))
                         .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
-                        .lineLimit(1)
                 }
-                
-                Spacer()
+                .frame(maxWidth: .infinity, alignment: .leading)
                 
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundColor(.green)
