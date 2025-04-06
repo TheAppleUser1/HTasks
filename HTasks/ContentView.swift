@@ -347,38 +347,7 @@ struct MainContent: View {
                         .offset(y: showAchievementBanner ? 0 : 200)
                         .animation(.spring(), value: showAchievementBanner)
                 }
-        NavigationView {
-            if isWelcomeActive {
-                WelcomeView(tasks: $tasks, isWelcomeActive: $isWelcomeActive)
-            } else {
-                HomeView(tasks: $tasks)
             }
-        }
-        .navigationViewStyle(StackNavigationViewStyle())
-        .onAppear {
-            loadTasks()
-            
-            // Check if we should skip welcome screen
-            let hasSeenWelcome = UserDefaults.standard.bool(forKey: "hasSeenWelcome")
-            if hasSeenWelcome && !tasks.isEmpty {
-                isWelcomeActive = false
-            }
-        }
-    }
-    
-    private func loadTasks() {
-        if let savedTasks = UserDefaults.standard.data(forKey: "savedTasks") {
-            do {
-                let decodedTasks = try JSONDecoder().decode([Task].self, from: savedTasks)
-                self.tasks = decodedTasks
-                
-                // Log for debugging
-                print("Loaded \(decodedTasks.count) tasks from UserDefaults")
-            } catch {
-                print("Failed to decode tasks: \(error.localizedDescription)")
-            }
-        } else {
-            print("No saved tasks found in UserDefaults")
         }
     }
 }
@@ -2035,6 +2004,34 @@ struct StatCard: View {
             RoundedRectangle(cornerRadius: 12)
                 .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white)
         )
+    }
+}
+
+struct ContentView: View {
+    @State private var isWelcomeActive = true
+    @State private var tasks: [Task] = []
+    
+    var body: some View {
+        NavigationView {
+            if isWelcomeActive {
+                WelcomeView(isActive: $isWelcomeActive)
+            } else {
+                HomeView(tasks: $tasks)
+            }
+        }
+        .onAppear {
+            loadTasks()
+        }
+    }
+    
+    private func loadTasks() {
+        if let savedTasks = UserDefaults.standard.data(forKey: "savedTasks") {
+            do {
+                tasks = try JSONDecoder().decode([Task].self, from: savedTasks)
+            } catch {
+                print("Failed to decode tasks: \(error.localizedDescription)")
+            }
+        }
     }
 }
 
