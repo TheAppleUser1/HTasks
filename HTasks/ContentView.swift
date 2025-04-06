@@ -293,12 +293,60 @@ struct UserSettings: Codable {
     }
 }
 
-struct ContentView: View {
-    @State private var isWelcomeActive = true
-    @State private var tasks: [Task] = []
+struct MainContent: View {
+    @Binding var tasks: [Task]
+    @Binding var settings: UserSettings
+    @Binding var showingDeleteAlert: Bool
+    @Binding var taskToDelete: Task?
+    @Binding var showAchievementBanner: Bool
+    @Binding var completedAchievement: Achievement?
+    @Binding var showingStatisticsSheet: Bool
+    @Binding var showingAddTaskSheet: Bool
+    let completedTasksCount: Int
+    let onToggleTask: (Task) -> Void
+    let onDeleteTask: (Task) -> Void
     @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
+        ZStack {
+            VStack(spacing: 0) {
+                TaskCompletionHeader(completedTasksCount: completedTasksCount)
+                
+                List {
+                    ForEach(tasks) { task in
+                        TaskListRow(
+                            task: task,
+                            onToggleCompletion: { onToggleTask(task) },
+                            onDelete: {
+                                taskToDelete = task
+                                if settings.showDeleteConfirmation {
+                                    showingDeleteAlert = true
+                                } else {
+                                    onDeleteTask(task)
+                                }
+                            }
+                        )
+                    }
+                }
+                .listStyle(PlainListStyle())
+                .background(Color.clear)
+            }
+            
+            VStack {
+                Spacer()
+                BottomActionButtons(
+                    onStatistics: { showingStatisticsSheet = true },
+                    onAddTask: { showingAddTaskSheet = true }
+                )
+            }
+            
+            if showAchievementBanner, let achievement = completedAchievement {
+                VStack {
+                    Spacer()
+                    AchievementBanner(achievement: achievement)
+                        .offset(y: showAchievementBanner ? 0 : 200)
+                        .animation(.spring(), value: showAchievementBanner)
+                }
         NavigationView {
             if isWelcomeActive {
                 WelcomeView(tasks: $tasks, isWelcomeActive: $isWelcomeActive)
@@ -1504,6 +1552,87 @@ struct AddTaskSheet: View {
     }
 }
 
+struct SettingsSheet: View {
+    @Binding var isPresented: Bool
+    @Binding var settings: UserSettings
+    @Environment(\.colorScheme) var colorScheme
+    
+    var body: some View {
+        VStack(spacing: 24) {
+            Text("Settings")
+                .font(.title)
+                .fontWeight(.bold)
+                .foregroundColor(colorScheme == .dark ? .white : .black)
+                .padding(.top, 20)
+            
+            VStack(alignment: .leading, spacing: 20) {
+                Text("Customization")
+                    .font(.headline)
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                
+                Toggle("Show Confirmation when clicking delete", isOn: $settings.showDeleteConfirmation)
+                    .onChange(of: settings.showDeleteConfirmation) { _, newValue in
+                        saveSettings()
+                    }
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Change the Confirmation text when clicking delete")
+                        .foregroundColor(settings.showDeleteConfirmation ? 
+                                       (colorScheme == .dark ? .white : .black) : 
+                                       (colorScheme == .dark ? .white.opacity(0.4) : .black.opacity(0.4)))
+                    
+                    TextField("Confirmation message", text: $settings.deleteConfirmationText)
+                        .padding()
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
+                                .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
+                        )
+                        .disabled(!settings.showDeleteConfirmation)
+                        .opacity(settings.showDeleteConfirmation ? 1.0 : 0.4)
+                        .onChange(of: settings.deleteConfirmationText) { _, newValue in
+                            saveSettings()
+                        }
+                }
+            }
+            .padding(.horizontal)
+            
+            Spacer()
+            
+            Button(action: {
+                isPresented = false
+            }) {
+                Text("Done")
+                    .fontWeight(.medium)
+                    .padding()
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(colorScheme == .dark ? Color.blue.opacity(0.7) : Color.blue)
+                    )
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
+            }
+            .padding()
+        }
+        .background(
+            colorScheme == .dark ? Color.black : Color.white
+        )
+        .presentationDetents([.medium])
+    }
+    
+    private func saveSettings() {
+        do {
+            let encoded = try JSONEncoder().encode(settings)
+            UserDefaults.standard.set(encoded, forKey: "userSettings")
+            UserDefaults.standard.synchronize()
+            print("Successfully saved user settings")
+        } catch {
+            print("Failed to encode settings: \(error.localizedDescription)")
+        }
+    }
+}
+
 struct HomeView: View {
     @Binding var tasks: [Task]
     @State private var taskToDelete: Task?
@@ -1626,67 +1755,7 @@ struct HomeView: View {
             AddTaskSheet(isPresented: $showingAddTaskSheet, tasks: $tasks)
         }
         .sheet(isPresented: $showingSettingsSheet) {
-            VStack(spacing: 24) {
-                Text("Settings")
-                    .font(.title)
-                    .fontWeight(.bold)
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
-                    .padding(.top, 20)
-                
-                VStack(alignment: .leading, spacing: 20) {
-                    Text("Customization")
-                        .font(.headline)
-                        .foregroundColor(colorScheme == .dark ? .white : .black)
-                    
-                    Toggle("Show Confirmation when clicking delete", isOn: $settings.showDeleteConfirmation)
-                        .onChange(of: settings.showDeleteConfirmation) { _, newValue in
-                            saveSettings()
-                        }
-                        .foregroundColor(colorScheme == .dark ? .white : .black)
-                    
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Change the Confirmation text when clicking delete")
-                            .foregroundColor(settings.showDeleteConfirmation ? 
-                                           (colorScheme == .dark ? .white : .black) : 
-                                           (colorScheme == .dark ? .white.opacity(0.4) : .black.opacity(0.4)))
-                        
-                        TextField("Confirmation message", text: $settings.deleteConfirmationText)
-                            .padding()
-                            .background(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
-                                    .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
-                            )
-                            .disabled(!settings.showDeleteConfirmation)
-                            .opacity(settings.showDeleteConfirmation ? 1.0 : 0.4)
-                            .onChange(of: settings.deleteConfirmationText) { _, newValue in
-                                saveSettings()
-                            }
-                    }
-                }
-                .padding(.horizontal)
-                
-                Spacer()
-                
-                Button(action: {
-                    showingSettingsSheet = false
-                }) {
-                    Text("Done")
-                        .fontWeight(.medium)
-                        .padding()
-                        .frame(maxWidth: .infinity)
-                        .background(
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(colorScheme == .dark ? Color.blue.opacity(0.7) : Color.blue)
-                        )
-                        .foregroundColor(colorScheme == .dark ? .white : .black)
-                }
-                .padding()
-            }
-            .background(
-                colorScheme == .dark ? Color.black : Color.white
-            )
-            .presentationDetents([.medium])
+            SettingsSheet(isPresented: $showingSettingsSheet, settings: $settings)
         }
         .sheet(isPresented: $showingStatisticsSheet) {
             StatisticsView(tasks: $tasks)
