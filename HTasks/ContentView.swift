@@ -7,6 +7,7 @@
 
 import SwiftUI
 import UserNotifications
+import EventKit
 
 enum TaskPriority: String, CaseIterable, Codable {
     case easy = "Low"
@@ -696,61 +697,53 @@ struct AchievementsView: View {
     }
 }
 
-struct HomeView: View {
+struct CalendarView: View {
     @Binding var tasks: [Task]
-    @State private var taskToDelete: Task?
-    @State private var showingDeleteAlert = false
+    @State private var selectedDate = Date()
     @State private var showingAddTaskSheet = false
-    @State private var showingSettingsSheet = false
-    @State private var showingAchievements = false
     @State private var newTaskTitle = ""
     @State private var newTaskDueDate: Date = Date()
-    @State private var showDatePicker = false
-    @State private var settings = UserSettings.defaultSettings
-    @State private var completedAchievement: Achievement?
-    @State private var showAchievementBanner = false
-    @State private var showingStatisticsSheet = false
-    @Environment(\.colorScheme) var colorScheme
     @State private var selectedPriority: TaskPriority = .easy
     @State private var selectedCategory: TaskCategory = .personal
+    @Environment(\.colorScheme) var colorScheme
     
-    var completedTasksCount: Int {
-        tasks.filter { $0.isCompleted }.count
+    var tasksForSelectedDate: [Task] {
+        tasks.filter { task in
+            guard let dueDate = task.dueDate else { return false }
+            return Calendar.current.isDate(dueDate, inSameDayAs: selectedDate)
+        }
     }
     
     var body: some View {
-        NavigationView {
-            ZStack {
-                VStack(spacing: 0) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Number of tasks done this week:")
-                            .font(.headline)
-                            .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
-                        
-                        HStack(alignment: .bottom, spacing: 8) {
-                            Text("\(completedTasksCount)")
-                                .font(.system(size: 60, weight: .bold, design: .rounded))
-                                .foregroundColor(colorScheme == .dark ? .white : .black)
-                            
-                            if completedTasksCount == 0 {
-                                Text("u lazy or sum?")
-                                    .font(.system(size: 12))
-                                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .black.opacity(0.6))
-                                    .padding(.bottom, 12)
-                            }
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding()
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.gray.opacity(0.1))
-                    )
+        VStack(spacing: 20) {
+            // Calendar
+            DatePicker(
+                "Select Date",
+                selection: $selectedDate,
+                displayedComponents: [.date]
+            )
+            .datePickerStyle(.graphical)
+            .padding()
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white)
+            )
+            .padding(.horizontal)
+            
+            // Tasks for selected date
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Tasks for \(selectedDate.formatted(date: .long, time: .omitted))")
+                    .font(.headline)
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
                     .padding(.horizontal)
-                    .padding(.top)
-                    
+                
+                if tasksForSelectedDate.isEmpty {
+                    Text("No tasks scheduled for this day")
+                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
+                        .padding()
+                } else {
                     List {
-                        ForEach(tasks) { task in
+                        ForEach(tasksForSelectedDate) { task in
                             HStack(spacing: 12) {
                                 HStack(spacing: 6) {
                                     Circle()
@@ -781,32 +774,15 @@ struct HomeView: View {
                                 
                                 Spacer()
                                 
-                                HStack(spacing: 8) {
-                                    Button(action: {
-                                        toggleTaskCompletion(task)
-                                    }) {
-                                        Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
-                                            .font(.title2)
-                                            .foregroundColor(colorScheme == .dark ? .white : .black)
-                                            .contentShape(Rectangle())
-                                    }
-                                    .buttonStyle(BorderlessButtonStyle())
-                                    
-                                    Button(action: {
-                                        taskToDelete = task
-                                        if settings.showDeleteConfirmation {
-                                            showingDeleteAlert = true
-                                        } else {
-                                            deleteTask(task)
-                                        }
-                                    }) {
-                                        Image(systemName: "trash.fill")
-                                            .font(.title2)
-                                            .foregroundColor(colorScheme == .dark ? .white : .black)
-                                            .contentShape(Rectangle())
-                                    }
-                                    .buttonStyle(BorderlessButtonStyle())
+                                Button(action: {
+                                    toggleTaskCompletion(task)
+                                }) {
+                                    Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                                        .font(.title2)
+                                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                                        .contentShape(Rectangle())
                                 }
+                                .buttonStyle(BorderlessButtonStyle())
                             }
                             .padding(.vertical, 8)
                             .listRowBackground(
@@ -819,262 +795,101 @@ struct HomeView: View {
                         }
                     }
                     .listStyle(PlainListStyle())
-                    .background(Color.clear)
-                    .alert(isPresented: $showingDeleteAlert) {
-                        Alert(
-                            title: Text("Are you sure you want to delete this task?"),
-                            message: Text(settings.deleteConfirmationText),
-                            primaryButton: .destructive(Text("Delete").foregroundColor(colorScheme == .dark ? .white : .black)) {
-                                if let taskToDelete = taskToDelete {
-                                    deleteTask(taskToDelete)
-                                }
-                            },
-                            secondaryButton: .cancel(Text("No").foregroundColor(colorScheme == .dark ? .white : .black))
-                        )
-                    }
-                }
-                
-                VStack {
-                    Spacer()
-                    HStack {
-                        Button(action: {
-                            showingStatisticsSheet = true
-                        }) {
-                            Image(systemName: "chart.bar.fill")
-                                .font(.title2)
-                                .foregroundColor(colorScheme == .dark ? .white : .black)
-                                .frame(width: 60, height: 60)
-                                .background(
-                                    Circle()
-                                        .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white)
-                                        .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
-                                )
-                        }
-                        .padding(.leading, 20)
-                        .padding(.bottom, 20)
-                        
-                        Spacer()
-                        
-                        Button(action: {
-                            showingAddTaskSheet = true
-                        }) {
-                            Image(systemName: "plus")
-                                .font(.title)
-                                .fontWeight(.bold)
-                                .foregroundColor(colorScheme == .dark ? .black : .white)
-                                .frame(width: 60, height: 60)
-                                .background(
-                                    Circle()
-                                        .fill(colorScheme == .dark ? .white : .black)
-                                        .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
-                                )
-                        }
-                        .padding(.trailing, 20)
-                        .padding(.bottom, 20)
-                    }
-                }
-                
-                if showAchievementBanner, let achievement = completedAchievement {
-                    VStack {
-                        Spacer()
-                        AchievementBanner(achievement: achievement)
-                            .offset(y: showAchievementBanner ? 0 : 200)
-                            .animation(.spring(), value: showAchievementBanner)
-                    }
                 }
             }
-            .navigationTitle("My Tasks")
-            .navigationBarItems(trailing: 
-                HStack(spacing: 16) {
-                    Button(action: {
-                        showingAchievements = true
-                    }) {
-                        Image(systemName: "trophy.fill")
-                            .font(.title2)
-                            .foregroundColor(colorScheme == .dark ? .white : .black)
-                            .padding(8)
-                            .contentShape(Rectangle())
-                    }
-                    
-                    Button(action: {
-                        showingSettingsSheet = true
-                    }) {
-                        Image(systemName: "gear")
-                            .font(.title2)
-                            .foregroundColor(colorScheme == .dark ? .white : .black)
-                            .padding(8)
-                            .contentShape(Rectangle())
-                    }
-                }
-            )
-            .background(
-                LinearGradient(
-                    gradient: Gradient(colors: colorScheme == .dark ? 
-                                      [Color.black, Color.blue.opacity(0.2)] : 
-                                      [Color.white, Color.blue.opacity(0.1)]),
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .edgesIgnoringSafeArea(.all)
-            )
-            .navigationDestination(isPresented: $showingAchievements) {
-                AchievementsView(tasks: $tasks)
+            
+            Spacer()
+        }
+        .navigationTitle("Calendar")
+        .navigationBarItems(trailing: 
+            Button(action: {
+                showingAddTaskSheet = true
+            }) {
+                Image(systemName: "plus")
+                    .font(.title2)
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
             }
-            .sheet(isPresented: $showingAddTaskSheet) {
-                VStack(spacing: 20) {
-                    Text("Add New Task")
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .foregroundColor(colorScheme == .dark ? .white : .black)
-                    
-                    TextField("Task name", text: $newTaskTitle)
-                        .padding()
-                        .background(
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
-                                .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
-                        )
-                        .padding(.horizontal)
-                    
-                    HStack {
-                        Text("Priority")
-                            .foregroundColor(colorScheme == .dark ? .white : .black)
-                        Picker("Priority", selection: $selectedPriority) {
-                            ForEach([TaskPriority.easy, .medium, .difficult], id: \.self) { priority in
-                                HStack {
-                                    Circle()
-                                        .fill(priority.color)
-                                        .frame(width: 10, height: 10)
-                                    Text(priority.rawValue)
-                                }
-                                .tag(priority)
-                            }
-                        }
-                        .pickerStyle(SegmentedPickerStyle())
-                    }
+        )
+        .sheet(isPresented: $showingAddTaskSheet) {
+            VStack(spacing: 20) {
+                Text("Add New Task")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                
+                TextField("Task name", text: $newTaskTitle)
+                    .padding()
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
+                    )
                     .padding(.horizontal)
-                    
-                    HStack {
-                        Text("Category")
-                            .foregroundColor(colorScheme == .dark ? .white : .black)
-                        Picker("Category", selection: $selectedCategory) {
-                            ForEach(TaskCategory.allCases, id: \.self) { category in
-                                HStack {
-                                    Image(systemName: category.icon)
-                                    Text(category.rawValue)
-                                }
-                                .tag(category)
-                            }
-                        }
-                        .pickerStyle(MenuPickerStyle())
-                    }
+                
+                DatePicker("Due Date & Time", selection: $newTaskDueDate, in: Date()...)
+                    .datePickerStyle(.compact)
+                    .padding()
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
+                    )
                     .padding(.horizontal)
-                    
-                    Toggle("Add due date", isOn: $showDatePicker)
-                        .padding(.horizontal)
+                
+                HStack {
+                    Text("Priority")
                         .foregroundColor(colorScheme == .dark ? .white : .black)
-                    
-                    if showDatePicker {
-                        DatePicker("Due Date & Time", selection: $newTaskDueDate, in: Date()...)
-                            .datePickerStyle(.compact)
+                    Picker("Priority", selection: $selectedPriority) {
+                        ForEach([TaskPriority.easy, .medium, .difficult], id: \.self) { priority in
+                            HStack {
+                                Circle()
+                                    .fill(priority.color)
+                                    .frame(width: 10, height: 10)
+                                Text(priority.rawValue)
+                            }
+                            .tag(priority)
+                        }
+                    }
+                    .pickerStyle(SegmentedPickerStyle())
+                }
+                .padding(.horizontal)
+                
+                HStack {
+                    Text("Category")
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                    Picker("Category", selection: $selectedCategory) {
+                        ForEach(TaskCategory.allCases, id: \.self) { category in
+                            HStack {
+                                Image(systemName: category.icon)
+                                Text(category.rawValue)
+                            }
+                            .tag(category)
+                        }
+                    }
+                    .pickerStyle(MenuPickerStyle())
+                }
+                .padding(.horizontal)
+                
+                HStack(spacing: 15) {
+                    Button(action: {
+                        showingAddTaskSheet = false
+                    }) {
+                        Text("Cancel")
+                            .fontWeight(.medium)
                             .padding()
+                            .frame(maxWidth: .infinity)
                             .background(
                                 RoundedRectangle(cornerRadius: 10)
-                                    .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
+                                    .stroke(colorScheme == .dark ? Color.white.opacity(0.3) : Color.black.opacity(0.3), lineWidth: 1)
                             )
-                            .padding(.horizontal)
                     }
-                    
-                    HStack(spacing: 15) {
-                        Button(action: {
-                            showingAddTaskSheet = false
-                        }) {
-                            Text("Cancel")
-                                .fontWeight(.medium)
-                                .padding()
-                                .frame(maxWidth: .infinity)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .stroke(colorScheme == .dark ? Color.white.opacity(0.3) : Color.black.opacity(0.3), lineWidth: 1)
-                                )
-                        }
-                        
-                        Button(action: {
-                            if !newTaskTitle.isEmpty {
-                                addTask(newTaskTitle, withDate: showDatePicker)
-                                newTaskTitle = ""
-                                showDatePicker = false
-                                showingAddTaskSheet = false
-                            }
-                        }) {
-                            Text("Add")
-                                .fontWeight(.medium)
-                                .padding()
-                                .frame(maxWidth: .infinity)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .fill(colorScheme == .dark ? Color.blue.opacity(0.7) : Color.blue)
-                                )
-                                .foregroundColor(colorScheme == .dark ? .white : .black)
-                        }
-                    }
-                    .padding(.horizontal)
-                    
-                    Spacer()
-                }
-                .padding(.top, 30)
-                .background(
-                    colorScheme == .dark ? Color.black : Color.white
-                )
-                .presentationDetents([.height(showDatePicker ? 450 : 350)])
-            }
-            .sheet(isPresented: $showingSettingsSheet) {
-                VStack(spacing: 24) {
-                    Text("Settings")
-                        .font(.title)
-                        .fontWeight(.bold)
-                        .foregroundColor(colorScheme == .dark ? .white : .black)
-                        .padding(.top, 20)
-                    
-                    VStack(alignment: .leading, spacing: 20) {
-                        Text("Customization")
-                            .font(.headline)
-                            .foregroundColor(colorScheme == .dark ? .white : .black)
-                        
-                        Toggle("Show Confirmation when clicking delete", isOn: $settings.showDeleteConfirmation)
-                            .onChange(of: settings.showDeleteConfirmation) { _, newValue in
-                                saveSettings()
-                            }
-                            .foregroundColor(colorScheme == .dark ? .white : .black)
-                        
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("Change the Confirmation text when clicking delete")
-                                .foregroundColor(settings.showDeleteConfirmation ? 
-                                               (colorScheme == .dark ? .white : .black) : 
-                                               (colorScheme == .dark ? .white.opacity(0.4) : .black.opacity(0.4)))
-                            
-                            TextField("Confirmation message", text: $settings.deleteConfirmationText)
-                                .padding()
-                                .background(
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
-                                        .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
-                                )
-                                .disabled(!settings.showDeleteConfirmation)
-                                .opacity(settings.showDeleteConfirmation ? 1.0 : 0.4)
-                                .onChange(of: settings.deleteConfirmationText) { _, newValue in
-                                    saveSettings()
-                                }
-                        }
-                    }
-                    .padding(.horizontal)
-                    
-                    Spacer()
                     
                     Button(action: {
-                        showingSettingsSheet = false
+                        if !newTaskTitle.isEmpty {
+                            addTask(newTaskTitle)
+                            newTaskTitle = ""
+                            showingAddTaskSheet = false
+                        }
                     }) {
-                        Text("Done")
+                        Text("Add")
                             .fontWeight(.medium)
                             .padding()
                             .frame(maxWidth: .infinity)
@@ -1084,16 +899,724 @@ struct HomeView: View {
                             )
                             .foregroundColor(colorScheme == .dark ? .white : .black)
                     }
-                    .padding()
                 }
-                .background(
-                    colorScheme == .dark ? Color.black : Color.white
+                .padding(.horizontal)
+                
+                Spacer()
+            }
+            .padding(.top, 30)
+            .background(
+                colorScheme == .dark ? Color.black : Color.white
+            )
+        }
+        .onAppear {
+            syncWithAppleCalendar()
+        }
+    }
+    
+    private func toggleTaskCompletion(_ task: Task) {
+        if let index = tasks.firstIndex(where: { $0.id == task.id }) {
+            tasks[index].isCompleted.toggle()
+            if tasks[index].isCompleted {
+                tasks[index].completionDate = Date()
+            }
+            saveTasks()
+        }
+    }
+    
+    private func addTask(_ title: String) {
+        let newTask = Task(
+            title: title,
+            dueDate: newTaskDueDate,
+            category: selectedCategory,
+            priority: selectedPriority
+        )
+        tasks.append(newTask)
+        saveTasks()
+        addToAppleCalendar(newTask)
+    }
+    
+    private func saveTasks() {
+        do {
+            let encoded = try JSONEncoder().encode(tasks)
+            UserDefaults.standard.set(encoded, forKey: "savedTasks")
+            UserDefaults.standard.synchronize()
+        } catch {
+            print("Failed to encode tasks: \(error.localizedDescription)")
+        }
+    }
+    
+    private func syncWithAppleCalendar() {
+        let eventStore = EKEventStore()
+        
+        switch EKEventStore.authorizationStatus(for: .event) {
+        case .authorized:
+            loadEventsFromCalendar(eventStore)
+        case .notDetermined:
+            eventStore.requestAccess(to: .event) { granted, error in
+                if granted {
+                    loadEventsFromCalendar(eventStore)
+                }
+            }
+        default:
+            print("Calendar access denied")
+        }
+    }
+    
+    private func loadEventsFromCalendar(_ eventStore: EKEventStore) {
+        let calendar = Calendar.current
+        let startDate = calendar.date(byAdding: .month, value: -1, to: Date())!
+        let endDate = calendar.date(byAdding: .month, value: 1, to: Date())!
+        
+        let predicate = eventStore.predicateForEvents(withStart: startDate, end: endDate, calendars: nil)
+        let events = eventStore.events(matching: predicate)
+        
+        for event in events {
+            if !tasks.contains(where: { $0.title == event.title }) {
+                let newTask = Task(
+                    title: event.title,
+                    dueDate: event.startDate,
+                    category: .personal,
+                    priority: .medium
                 )
-                .presentationDetents([.medium])
+                tasks.append(newTask)
             }
-            .sheet(isPresented: $showingStatisticsSheet) {
-                StatisticsView(tasks: $tasks)
+        }
+        saveTasks()
+    }
+    
+    private func addToAppleCalendar(_ task: Task) {
+        let eventStore = EKEventStore()
+        
+        switch EKEventStore.authorizationStatus(for: .event) {
+        case .authorized:
+            createEvent(eventStore, task)
+        case .notDetermined:
+            eventStore.requestAccess(to: .event) { granted, error in
+                if granted {
+                    createEvent(eventStore, task)
+                }
             }
+        default:
+            print("Calendar access denied")
+        }
+    }
+    
+    private func createEvent(_ eventStore: EKEventStore, _ task: Task) {
+        let event = EKEvent(eventStore: eventStore)
+        event.title = task.title
+        event.startDate = task.dueDate
+        event.endDate = task.dueDate?.addingTimeInterval(3600) // 1 hour duration
+        event.calendar = eventStore.defaultCalendarForNewEvents
+        
+        do {
+            try eventStore.save(event, span: .thisEvent)
+        } catch {
+            print("Failed to save event: \(error.localizedDescription)")
+        }
+    }
+}
+
+struct TaskInsightsView: View {
+    @Binding var tasks: [Task]
+    @State private var settings = UserSettings.defaultSettings
+    @Environment(\.colorScheme) var colorScheme
+    
+    var mostProductiveDay: String {
+        let calendar = Calendar.current
+        let weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+        var dayCounts = [Int: Int]()
+        
+        for task in tasks where task.isCompleted {
+            if let completionDate = task.completionDate {
+                let weekday = calendar.component(.weekday, from: completionDate)
+                dayCounts[weekday, default: 0] += 1
+            }
+        }
+        
+        if let mostProductive = dayCounts.max(by: { $0.value < $1.value }) {
+            return weekdays[mostProductive.key - 1]
+        }
+        return "No data"
+    }
+    
+    var mostCommonCategory: TaskCategory {
+        var categoryCounts = [TaskCategory: Int]()
+        for task in tasks where task.isCompleted {
+            categoryCounts[task.category, default: 0] += 1
+        }
+        return categoryCounts.max(by: { $0.value < $1.value })?.key ?? .personal
+    }
+    
+    var averageCompletionTime: String {
+        let completedTasks = tasks.filter { $0.isCompleted && $0.dueDate != nil && $0.completionDate != nil }
+        if completedTasks.isEmpty { return "No data" }
+        
+        let totalTime = completedTasks.reduce(0) { result, task in
+            guard let dueDate = task.dueDate,
+                  let completionDate = task.completionDate else { return result }
+            return result + completionDate.timeIntervalSince(dueDate)
+        }
+        
+        let averageTime = totalTime / Double(completedTasks.count)
+        let hours = Int(averageTime / 3600)
+        let minutes = Int((averageTime.truncatingRemainder(dividingBy: 3600)) / 60)
+        
+        if hours > 0 {
+            return "\(hours)h \(minutes)m"
+        } else {
+            return "\(minutes)m"
+        }
+    }
+    
+    var recommendations: [String] {
+        var recs = [String]()
+        
+        // Check for overdue tasks
+        let overdueTasks = tasks.filter { !$0.isCompleted && $0.dueDate != nil && $0.dueDate! < Date() }
+        if !overdueTasks.isEmpty {
+            recs.append("You have \(overdueTasks.count) overdue task(s). Consider completing them first.")
+        }
+        
+        // Check for task distribution
+        let categoryDistribution = Dictionary(grouping: tasks.filter { !$0.isCompleted }, by: { $0.category })
+        if let mostTasksCategory = categoryDistribution.max(by: { $0.value.count < $1.value.count }) {
+            if mostTasksCategory.value.count > 5 {
+                recs.append("You have many tasks in the \(mostTasksCategory.key.rawValue) category. Consider delegating some.")
+            }
+        }
+        
+        // Check for high priority tasks
+        let highPriorityTasks = tasks.filter { !$0.isCompleted && $0.priority == .difficult }
+        if !highPriorityTasks.isEmpty {
+            recs.append("You have \(highPriorityTasks.count) high priority task(s). Focus on these first.")
+        }
+        
+        // Check for completion rate
+        let completionRate = Double(tasks.filter { $0.isCompleted }.count) / Double(tasks.count)
+        if completionRate < 0.5 {
+            recs.append("Your task completion rate is low. Try breaking tasks into smaller steps.")
+        }
+        
+        return recs
+    }
+    
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                // Productivity Patterns
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Productivity Patterns")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                        .padding(.horizontal)
+                    
+                    HStack {
+                        StatCard(
+                            title: "Most Productive Day",
+                            value: mostProductiveDay,
+                            icon: "calendar.badge.clock",
+                            color: .blue
+                        )
+                        
+                        StatCard(
+                            title: "Most Common Category",
+                            value: mostCommonCategory.rawValue,
+                            icon: mostCommonCategory.icon,
+                            color: mostCommonCategory.color
+                        )
+                    }
+                    .padding(.horizontal)
+                }
+                
+                // Task Performance
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Task Performance")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                        .padding(.horizontal)
+                    
+                    StatCard(
+                        title: "Average Completion Time",
+                        value: averageCompletionTime,
+                        icon: "clock.fill",
+                        color: .green
+                    )
+                    .padding(.horizontal)
+                }
+                
+                // Recommendations
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Recommendations")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                        .padding(.horizontal)
+                    
+                    VStack(alignment: .leading, spacing: 12) {
+                        ForEach(recommendations, id: \.self) { recommendation in
+                            HStack(alignment: .top, spacing: 12) {
+                                Image(systemName: "lightbulb.fill")
+                                    .foregroundColor(.yellow)
+                                    .font(.title3)
+                                
+                                Text(recommendation)
+                                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                                    .font(.subheadline)
+                            }
+                            .padding()
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white)
+                            )
+                        }
+                    }
+                    .padding(.horizontal)
+                }
+            }
+            .padding(.vertical)
+        }
+        .navigationTitle("Task Insights")
+        .background(
+            colorScheme == .dark ? Color.black : Color.white
+        )
+        .onAppear {
+            loadSettings()
+        }
+    }
+    
+    private func loadSettings() {
+        if let savedSettings = UserDefaults.standard.data(forKey: "userSettings") {
+            if let decodedSettings = try? JSONDecoder().decode(UserSettings.self, from: savedSettings) {
+                self.settings = decodedSettings
+            }
+        }
+    }
+}
+
+struct HomeView: View {
+    @Binding var tasks: [Task]
+    @State private var taskToDelete: Task?
+    @State private var showingDeleteAlert = false
+    @State private var showingAddTaskSheet = false
+    @State private var showingSettingsSheet = false
+    @State private var showingAchievements = false
+    @State private var newTaskTitle = ""
+    @State private var newTaskDueDate: Date = Date()
+    @State private var showDatePicker = false
+    @State private var settings = UserSettings.defaultSettings
+    @State private var completedAchievement: Achievement?
+    @State private var showAchievementBanner = false
+    @State private var showingStatisticsSheet = false
+    @State private var showingInsights = false
+    @Environment(\.colorScheme) var colorScheme
+    @State private var selectedPriority: TaskPriority = .easy
+    @State private var selectedCategory: TaskCategory = .personal
+    @State private var showingCalendar = false
+    
+    var completedTasksCount: Int {
+        tasks.filter { $0.isCompleted }.count
+    }
+    
+    var body: some View {
+        ZStack {
+            VStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Number of tasks done this week:")
+                        .font(.headline)
+                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
+                    
+                    HStack(alignment: .bottom, spacing: 8) {
+                        Text("\(completedTasksCount)")
+                            .font(.system(size: 60, weight: .bold, design: .rounded))
+                            .foregroundColor(colorScheme == .dark ? .white : .black)
+                        
+                        if completedTasksCount == 0 {
+                            Text("u lazy or sum?")
+                                .font(.system(size: 12))
+                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .black.opacity(0.6))
+                                .padding(.bottom, 12)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.gray.opacity(0.1))
+                )
+                .padding(.horizontal)
+                .padding(.top)
+                
+                List {
+                    ForEach(tasks) { task in
+                        HStack(spacing: 12) {
+                            HStack(spacing: 6) {
+                                Circle()
+                                    .fill(task.priority.color)
+                                    .frame(width: 8, height: 8)
+                                
+                                Image(systemName: task.category.icon)
+                                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
+                                    .font(.subheadline)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(task.title)
+                                    .font(.headline)
+                                    .foregroundColor(
+                                        task.isCompleted ? 
+                                        (colorScheme == .dark ? .white.opacity(0.5) : .black.opacity(0.5)) : 
+                                        (colorScheme == .dark ? .white : .black)
+                                    )
+                                    .strikethrough(task.isCompleted)
+                                
+                                if let dueDate = task.dueDate {
+                                    Text(dueDate, style: .time)
+                                        .font(.caption)
+                                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
+                                }
+                            }
+                            
+                            Spacer()
+                            
+                            HStack(spacing: 8) {
+                                Button(action: {
+                                    toggleTaskCompletion(task)
+                                }) {
+                                    Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                                        .font(.title2)
+                                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(BorderlessButtonStyle())
+                                
+                                Button(action: {
+                                    taskToDelete = task
+                                    if settings.showDeleteConfirmation {
+                                        showingDeleteAlert = true
+                                    } else {
+                                        deleteTask(task)
+                                    }
+                                }) {
+                                    Image(systemName: "trash.fill")
+                                        .font(.title2)
+                                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(BorderlessButtonStyle())
+                            }
+                        }
+                        .padding(.vertical, 8)
+                        .listRowBackground(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
+                                .padding(EdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8))
+                        )
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                    }
+                }
+                .listStyle(PlainListStyle())
+                .background(Color.clear)
+                .alert(isPresented: $showingDeleteAlert) {
+                    Alert(
+                        title: Text("Are you sure you want to delete this task?"),
+                        message: Text(settings.deleteConfirmationText),
+                        primaryButton: .destructive(Text("Delete").foregroundColor(colorScheme == .dark ? .white : .black)) {
+                            if let taskToDelete = taskToDelete {
+                                deleteTask(taskToDelete)
+                            }
+                        },
+                        secondaryButton: .cancel(Text("No").foregroundColor(colorScheme == .dark ? .white : .black))
+                    )
+                }
+            }
+            
+            VStack {
+                Spacer()
+                HStack {
+                    Button(action: {
+                        showingStatisticsSheet = true
+                    }) {
+                        Image(systemName: "chart.bar.fill")
+                            .font(.title2)
+                            .foregroundColor(colorScheme == .dark ? .white : .black)
+                            .frame(width: 60, height: 60)
+                            .background(
+                                Circle()
+                                    .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white)
+                                    .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
+                            )
+                    }
+                    .padding(.leading, 20)
+                    .padding(.bottom, 20)
+                    
+                    Spacer()
+                    
+                    Button(action: {
+                        showingAddTaskSheet = true
+                    }) {
+                        Image(systemName: "plus")
+                            .font(.title)
+                            .fontWeight(.bold)
+                            .foregroundColor(colorScheme == .dark ? .black : .white)
+                            .frame(width: 60, height: 60)
+                            .background(
+                                Circle()
+                                    .fill(colorScheme == .dark ? .white : .black)
+                                    .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
+                            )
+                    }
+                    .padding(.trailing, 20)
+                    .padding(.bottom, 20)
+                }
+            }
+            
+            if showAchievementBanner, let achievement = completedAchievement {
+                VStack {
+                    Spacer()
+                    AchievementBanner(achievement: achievement)
+                        .offset(y: showAchievementBanner ? 0 : 200)
+                        .animation(.spring(), value: showAchievementBanner)
+                }
+            }
+        }
+        .navigationTitle("My Tasks")
+        .navigationBarItems(trailing: 
+            HStack(spacing: 16) {
+                Button(action: {
+                    showingInsights = true
+                }) {
+                    Image(systemName: "chart.line.uptrend.xyaxis")
+                        .font(.title2)
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                        .padding(8)
+                        .contentShape(Rectangle())
+                }
+                
+                Button(action: {
+                    showingCalendar = true
+                }) {
+                    Image(systemName: "calendar")
+                        .font(.title2)
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                        .padding(8)
+                        .contentShape(Rectangle())
+                }
+                
+                Button(action: {
+                    showingAchievements = true
+                }) {
+                    Image(systemName: "trophy.fill")
+                        .font(.title2)
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                        .padding(8)
+                        .contentShape(Rectangle())
+                }
+                
+                Button(action: {
+                    showingSettingsSheet = true
+                }) {
+                    Image(systemName: "gear")
+                        .font(.title2)
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                        .padding(8)
+                        .contentShape(Rectangle())
+                }
+            }
+        )
+        .background(
+            LinearGradient(
+                gradient: Gradient(colors: colorScheme == .dark ? 
+                                  [Color.black, Color.blue.opacity(0.2)] : 
+                                  [Color.white, Color.blue.opacity(0.1)]),
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .edgesIgnoringSafeArea(.all)
+        )
+        .navigationDestination(isPresented: $showingAchievements) {
+            AchievementsView(tasks: $tasks)
+        }
+        .navigationDestination(isPresented: $showingCalendar) {
+            CalendarView(tasks: $tasks)
+        }
+        .navigationDestination(isPresented: $showingInsights) {
+            TaskInsightsView(tasks: $tasks)
+        }
+        .sheet(isPresented: $showingAddTaskSheet) {
+            VStack(spacing: 20) {
+                Text("Add New Task")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                
+                TextField("Task name", text: $newTaskTitle)
+                    .padding()
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
+                    )
+                    .padding(.horizontal)
+                
+                HStack {
+                    Text("Priority")
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                    Picker("Priority", selection: $selectedPriority) {
+                        ForEach([TaskPriority.easy, .medium, .difficult], id: \.self) { priority in
+                            HStack {
+                                Circle()
+                                    .fill(priority.color)
+                                    .frame(width: 10, height: 10)
+                                Text(priority.rawValue)
+                            }
+                            .tag(priority)
+                        }
+                    }
+                    .pickerStyle(SegmentedPickerStyle())
+                }
+                .padding(.horizontal)
+                
+                HStack {
+                    Text("Category")
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                    Picker("Category", selection: $selectedCategory) {
+                        ForEach(TaskCategory.allCases, id: \.self) { category in
+                            HStack {
+                                Image(systemName: category.icon)
+                                Text(category.rawValue)
+                            }
+                            .tag(category)
+                        }
+                    }
+                    .pickerStyle(MenuPickerStyle())
+                }
+                .padding(.horizontal)
+                
+                Toggle("Add due date", isOn: $showDatePicker)
+                    .padding(.horizontal)
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                
+                if showDatePicker {
+                    DatePicker("Due Date & Time", selection: $newTaskDueDate, in: Date()...)
+                        .datePickerStyle(.compact)
+                        .padding()
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
+                        )
+                        .padding(.horizontal)
+                }
+                
+                HStack(spacing: 15) {
+                    Button(action: {
+                        showingAddTaskSheet = false
+                    }) {
+                        Text("Cancel")
+                            .fontWeight(.medium)
+                            .padding()
+                            .frame(maxWidth: .infinity)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(colorScheme == .dark ? Color.white.opacity(0.3) : Color.black.opacity(0.3), lineWidth: 1)
+                            )
+                    }
+                    
+                    Button(action: {
+                        if !newTaskTitle.isEmpty {
+                            addTask(newTaskTitle)
+                            newTaskTitle = ""
+                            showingAddTaskSheet = false
+                        }
+                    }) {
+                        Text("Add")
+                            .fontWeight(.medium)
+                            .padding()
+                            .frame(maxWidth: .infinity)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(colorScheme == .dark ? Color.blue.opacity(0.7) : Color.blue)
+                            )
+                            .foregroundColor(colorScheme == .dark ? .white : .black)
+                    }
+                }
+                .padding(.horizontal)
+                
+                Spacer()
+            }
+            .padding(.top, 30)
+            .background(
+                colorScheme == .dark ? Color.black : Color.white
+            )
+        }
+        .sheet(isPresented: $showingSettingsSheet) {
+            VStack(spacing: 24) {
+                Text("Settings")
+                    .font(.title)
+                    .fontWeight(.bold)
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                    .padding(.top, 20)
+                
+                VStack(alignment: .leading, spacing: 20) {
+                    Text("Customization")
+                        .font(.headline)
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                    
+                    Toggle("Show Confirmation when clicking delete", isOn: $settings.showDeleteConfirmation)
+                        .onChange(of: settings.showDeleteConfirmation) { _, newValue in
+                            saveSettings()
+                        }
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                    
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Change the Confirmation text when clicking delete")
+                            .foregroundColor(settings.showDeleteConfirmation ? 
+                                           (colorScheme == .dark ? .white : .black) : 
+                                           (colorScheme == .dark ? .white.opacity(0.4) : .black.opacity(0.4)))
+                        
+                        TextField("Confirmation message", text: $settings.deleteConfirmationText)
+                            .padding()
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
+                                    .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
+                            )
+                            .disabled(!settings.showDeleteConfirmation)
+                            .opacity(settings.showDeleteConfirmation ? 1.0 : 0.4)
+                            .onChange(of: settings.deleteConfirmationText) { _, newValue in
+                                saveSettings()
+                            }
+                    }
+                }
+                .padding(.horizontal)
+                
+                Spacer()
+                
+                Button(action: {
+                    showingSettingsSheet = false
+                }) {
+                    Text("Done")
+                        .fontWeight(.medium)
+                        .padding()
+                        .frame(maxWidth: .infinity)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(colorScheme == .dark ? Color.blue.opacity(0.7) : Color.blue)
+                        )
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                }
+                .padding()
+            }
+            .background(
+                colorScheme == .dark ? Color.black : Color.white
+            )
+            .presentationDetents([.medium])
+        }
+        .sheet(isPresented: $showingStatisticsSheet) {
+            StatisticsView(tasks: $tasks)
         }
         .onAppear {
             loadSettings()
@@ -1124,23 +1647,15 @@ struct HomeView: View {
         }
     }
     
-    private func addTask(_ title: String, withDate: Bool = false) {
+    private func addTask(_ title: String) {
         let newTask = Task(
             title: title,
-            dueDate: withDate ? newTaskDueDate : nil,
-            completionDate: withDate ? Date() : nil,
+            dueDate: newTaskDueDate,
             category: selectedCategory,
             priority: selectedPriority
         )
         tasks.append(newTask)
         saveTasks()
-        
-        if withDate {
-            scheduleNotification(for: newTask, at: newTaskDueDate)
-        }
-        
-        selectedPriority = .easy
-        selectedCategory = .personal
     }
     
     private func deleteTask(_ task: Task) {
@@ -1181,36 +1696,6 @@ struct HomeView: View {
             print("Successfully saved user settings")
         } catch {
             print("Failed to encode settings: \(error.localizedDescription)")
-        }
-    }
-    
-    private func scheduleNotification(for task: Task, at date: Date) {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
-            if granted {
-                let content = UNMutableNotificationContent()
-                content.title = "Task Due: \(task.title)"
-                content.body = "Your task is due today!"
-                content.sound = .default
-                
-                let calendar = Calendar.current
-                let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date)
-                let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
-                
-                let request = UNNotificationRequest(identifier: task.id.uuidString, content: content, trigger: trigger)
-                UNUserNotificationCenter.current().add(request)
-                
-                let reminderDate = calendar.date(byAdding: .day, value: -1, to: date)!
-                let reminderComponents = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: reminderDate)
-                let reminderTrigger = UNCalendarNotificationTrigger(dateMatching: reminderComponents, repeats: false)
-                
-                let reminderContent = UNMutableNotificationContent()
-                reminderContent.title = "Task Reminder: \(task.title)"
-                reminderContent.body = "Your task is due tomorrow!"
-                reminderContent.sound = .default
-                
-                let reminderRequest = UNNotificationRequest(identifier: "\(task.id.uuidString)-reminder", content: reminderContent, trigger: reminderTrigger)
-                UNUserNotificationCenter.current().add(reminderRequest)
-            }
         }
     }
 }
