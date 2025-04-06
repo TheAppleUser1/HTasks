@@ -809,69 +809,75 @@ struct HomeView: View {
             }
         })
         .sheet(isPresented: $showingAddTaskSheet) {
-            VStack(spacing: 20) {
+            VStack(spacing: 24) {
                 Text("Add New Task")
-                    .font(.title2)
+                    .font(.title)
                     .fontWeight(.bold)
                     .foregroundColor(colorScheme == .dark ? .white : .black)
+                    .padding(.top, 20)
                 
-                TextField("Task name", text: $newTaskTitle)
-                    .padding()
-                    .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
-                            .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
-                    )
-                    .padding(.horizontal)
-                
-                HStack {
-                    Text("Priority")
-                        .foregroundColor(colorScheme == .dark ? .white : .black)
-                    Picker("Priority", selection: $selectedPriority) {
-                        ForEach([TaskPriority.easy, .medium, .difficult], id: \.self) { priority in
-                            HStack {
-                                Circle()
-                                    .fill(priority.color)
-                                    .frame(width: 10, height: 10)
-                                Text(priority.rawValue)
-                            }
-                            .tag(priority)
-                        }
-                    }
-                    .pickerStyle(SegmentedPickerStyle())
-                }
-                .padding(.horizontal)
-                
-                HStack {
-                    Text("Category")
-                        .foregroundColor(colorScheme == .dark ? .white : .black)
-                    Picker("Category", selection: $selectedCategory) {
-                        ForEach(TaskCategory.allCases, id: \.self) { category in
-                            HStack {
-                                Image(systemName: category.icon)
-                                Text(category.rawValue)
-                            }
-                            .tag(category)
-                        }
-                    }
-                    .pickerStyle(MenuPickerStyle())
-                }
-                .padding(.horizontal)
-                
-                Toggle("Add due date", isOn: $showDatePicker)
-                    .padding(.horizontal)
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
-                
-                if showDatePicker {
-                    DatePicker("Due Date & Time", selection: $newTaskDueDate, in: Date()...)
-                        .datePickerStyle(.compact)
+                VStack(spacing: 20) {
+                    TextField("Task name", text: $newTaskTitle)
                         .padding()
                         .background(
                             RoundedRectangle(cornerRadius: 10)
                                 .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
+                                .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
                         )
                         .padding(.horizontal)
+                    
+                    HStack {
+                        Text("Priority")
+                            .foregroundColor(colorScheme == .dark ? .white : .black)
+                        Picker("Priority", selection: $selectedPriority) {
+                            ForEach([TaskPriority.easy, .medium, .difficult], id: \.self) { priority in
+                                HStack {
+                                    Circle()
+                                        .fill(priority.color)
+                                        .frame(width: 10, height: 10)
+                                    Text(priority.rawValue)
+                                }
+                                .tag(priority)
+                            }
+                        }
+                        .pickerStyle(SegmentedPickerStyle())
+                    }
+                    .padding(.horizontal)
+                    
+                    HStack {
+                        Text("Category")
+                            .foregroundColor(colorScheme == .dark ? .white : .black)
+                        Picker("Category", selection: $selectedCategory) {
+                            ForEach(TaskCategory.allCases, id: \.self) { category in
+                                HStack {
+                                    Image(systemName: category.icon)
+                                    Text(category.rawValue)
+                                }
+                                .tag(category)
+                            }
+                        }
+                        .pickerStyle(MenuPickerStyle())
+                    }
+                    .padding(.horizontal)
+                    
+                    Toggle("Add due date", isOn: $showDatePicker)
+                        .padding(.horizontal)
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                    
+                    if showDatePicker {
+                        DatePicker("Due Date & Time", selection: $newTaskDueDate, in: Date()...)
+                            .datePickerStyle(.compact)
+                            .padding()
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
+                            )
+                            .padding(.horizontal)
+                    }
                 }
+                .padding(.horizontal)
+                
+                Spacer()
                 
                 HStack(spacing: 15) {
                     Button(action: {
@@ -906,10 +912,12 @@ struct HomeView: View {
                             .foregroundColor(colorScheme == .dark ? .white : .black)
                     }
                 }
+                .padding()
             }
-            .padding(.horizontal)
-            
-            Spacer()
+            .background(
+                colorScheme == .dark ? Color.black : Color.white
+            )
+            .presentationDetents([.height(showDatePicker ? 450 : 350)])
         }
         .sheet(isPresented: $showingSettingsSheet) {
             VStack(spacing: 24) {
