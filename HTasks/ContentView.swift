@@ -327,7 +327,6 @@ struct ContentView: View {
         // Check data version
         let savedVersion = UserDefaults.standard.integer(forKey: "dataVersion")
         if savedVersion < dataVersion {
-            // Handle data migration if needed
             migrateData(from: savedVersion)
         }
         
@@ -347,16 +346,6 @@ struct ContentView: View {
                 print("Loaded \(uniqueTasks.count) tasks from UserDefaults")
             } catch {
                 print("Failed to decode tasks: \(error.localizedDescription)")
-                // Attempt to recover by loading backup if available
-                if let backupData = UserDefaults.standard.data(forKey: "savedTasks_backup") {
-                    do {
-                        let backupTasks = try JSONDecoder().decode([Task].self, from: backupData)
-                        self.tasks = backupTasks
-                        print("Recovered \(backupTasks.count) tasks from backup")
-                    } catch {
-                        print("Failed to recover from backup: \(error.localizedDescription)")
-                    }
-                }
             }
         } else {
             print("No saved tasks found in UserDefaults")
@@ -365,11 +354,6 @@ struct ContentView: View {
     
     private func saveTasks(_ tasks: [Task]) {
         do {
-            // Create backup before saving
-            if let currentData = UserDefaults.standard.data(forKey: "savedTasks") {
-                UserDefaults.standard.set(currentData, forKey: "savedTasks_backup")
-            }
-            
             let encoded = try JSONEncoder().encode(tasks)
             UserDefaults.standard.set(encoded, forKey: "savedTasks")
             UserDefaults.standard.set(dataVersion, forKey: "dataVersion")
@@ -383,7 +367,6 @@ struct ContentView: View {
     private func migrateData(from version: Int) {
         // Handle data migration between versions
         if version < 1 {
-            // Migration logic for version 1
             if let oldData = UserDefaults.standard.data(forKey: "savedTasks") {
                 do {
                     let oldTasks = try JSONDecoder().decode([Task].self, from: oldData)
