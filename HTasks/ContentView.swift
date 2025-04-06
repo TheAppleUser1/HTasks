@@ -1127,43 +1127,11 @@ struct StatRow: View {
 
 struct AchievementsView: View {
     let tasks: [Task]
-    
-    private var achievements: [Achievement] {
-        var achievements: [Achievement] = []
-        
-        // First Task Achievement
-        if tasks.count >= 1 {
-            achievements.append(Achievement(
-                title: "Getting Started",
-                description: "Created your first task",
-                isUnlocked: true
-            ))
-        }
-        
-        // Task Master Achievement
-        if tasks.count >= 10 {
-            achievements.append(Achievement(
-                title: "Task Master",
-                description: "Created 10 tasks",
-                isUnlocked: true
-            ))
-        }
-        
-        // Completionist Achievement
-        if tasks.filter({ $0.isCompleted }).count >= 5 {
-            achievements.append(Achievement(
-                title: "Completionist",
-                description: "Completed 5 tasks",
-                isUnlocked: true
-            ))
-        }
-        
-        return achievements
-    }
+    @State private var settings = UserSettings.defaultSettings
     
     var body: some View {
         NavigationView {
-            List(achievements) { achievement in
+            List(settings.stats.achievements) { achievement in
                 AchievementRow(achievement: achievement)
             }
             .navigationTitle("Achievements")
@@ -1171,28 +1139,30 @@ struct AchievementsView: View {
     }
 }
 
-struct Achievement: Identifiable {
-    let id = UUID()
-    let title: String
-    let description: String
-    let isUnlocked: Bool
-}
-
 struct AchievementRow: View {
     let achievement: Achievement
+    @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
         HStack {
-            Image(systemName: achievement.isUnlocked ? "trophy.fill" : "trophy")
+            Image(systemName: achievement.icon)
                 .foregroundColor(achievement.isUnlocked ? .yellow : .gray)
                 .font(.title2)
             
             VStack(alignment: .leading) {
                 Text(achievement.title)
                     .font(.headline)
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
                 Text(achievement.description)
                     .font(.subheadline)
-                    .foregroundColor(.gray)
+                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
+                
+                if achievement.id.showsProgress {
+                    let progress = achievement.id.progress(stats: settings.stats)
+                    ProgressView(value: Double(progress.current), total: Double(progress.total))
+                        .progressViewStyle(LinearProgressViewStyle())
+                        .tint(achievement.isUnlocked ? .green : .gray)
+                }
             }
         }
         .padding(.vertical, 8)
