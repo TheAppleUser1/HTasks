@@ -354,10 +354,11 @@ struct SetupView: View {
             }
             .navigationTitle("Setup")
             .navigationBarItems(trailing: Button("Done") {
-                taskManager.userSettings.dailyTaskGoal = dailyTaskGoal
-                taskManager.userSettings.motivationLevel = Int(motivationLevel)
-                taskManager.userSettings.preferredNotificationTime = preferredNotificationTime
-                taskManager.saveSettings()
+                taskManager.updateSettings(
+                    dailyTaskGoal: dailyTaskGoal,
+                    motivationLevel: Int(motivationLevel),
+                    preferredNotificationTime: preferredNotificationTime
+                )
             })
         }
     }
@@ -867,6 +868,29 @@ final class TaskManager: ObservableObject, @unchecked Sendable {
             }
         }
     }
+    
+    func updateSettings(dailyTaskGoal: Int, motivationLevel: Int, preferredNotificationTime: Date) {
+        queue.async { [weak self] in
+            guard let self = self else { return }
+            DispatchQueue.main.async {
+                self.userSettings.dailyTaskGoal = dailyTaskGoal
+                self.userSettings.motivationLevel = motivationLevel
+                self.userSettings.preferredNotificationTime = preferredNotificationTime
+                self.saveSettings()
+            }
+        }
+    }
+    
+    func updateDeleteConfirmation(show: Bool, text: String) {
+        queue.async { [weak self] in
+            guard let self = self else { return }
+            DispatchQueue.main.async {
+                self.userSettings.showDeleteConfirmation = show
+                self.userSettings.deleteConfirmationText = text
+                self.saveSettings()
+            }
+        }
+    }
 }
 
 struct AddTaskView: View {
@@ -945,13 +969,28 @@ struct SettingsView: View {
         NavigationView {
             Form {
                 Section {
-                    Stepper("Daily Task Goal: \(taskManager.userSettings.dailyTaskGoal)", value: $taskManager.userSettings.dailyTaskGoal, in: 1...20)
+                    Stepper("Daily Task Goal: \(taskManager.userSettings.dailyTaskGoal)", value: Binding(
+                        get: { taskManager.userSettings.dailyTaskGoal },
+                        set: { newValue in
+                            taskManager.updateSettings(
+                                dailyTaskGoal: newValue,
+                                motivationLevel: taskManager.userSettings.motivationLevel,
+                                preferredNotificationTime: taskManager.userSettings.preferredNotificationTime
+                            )
+                        }
+                    ), in: 1...20)
                     
                     VStack(alignment: .leading) {
                         Text("Motivation Level")
                         Slider(value: Binding(
                             get: { Double(taskManager.userSettings.motivationLevel) },
-                            set: { taskManager.userSettings.motivationLevel = Int($0) }
+                            set: { newValue in
+                                taskManager.updateSettings(
+                                    dailyTaskGoal: taskManager.userSettings.dailyTaskGoal,
+                                    motivationLevel: Int(newValue),
+                                    preferredNotificationTime: taskManager.userSettings.preferredNotificationTime
+                                )
+                            }
                         ), in: 1...5, step: 1)
                         HStack {
                             Text("Low")
@@ -964,20 +1003,44 @@ struct SettingsView: View {
                 }
                 
                 Section {
-                    DatePicker("Preferred Notification Time", selection: $taskManager.userSettings.preferredNotificationTime, displayedComponents: .hourAndMinute)
+                    DatePicker("Preferred Notification Time", selection: Binding(
+                        get: { taskManager.userSettings.preferredNotificationTime },
+                        set: { newValue in
+                            taskManager.updateSettings(
+                                dailyTaskGoal: taskManager.userSettings.dailyTaskGoal,
+                                motivationLevel: taskManager.userSettings.motivationLevel,
+                                preferredNotificationTime: newValue
+                            )
+                        }
+                    ), displayedComponents: .hourAndMinute)
                 }
                 
                 Section {
-                    Toggle("Show Delete Confirmation", isOn: $taskManager.userSettings.showDeleteConfirmation)
+                    Toggle("Show Delete Confirmation", isOn: Binding(
+                        get: { taskManager.userSettings.showDeleteConfirmation },
+                        set: { newValue in
+                            taskManager.updateDeleteConfirmation(
+                                show: newValue,
+                                text: taskManager.userSettings.deleteConfirmationText
+                            )
+                        }
+                    ))
                     
                     if taskManager.userSettings.showDeleteConfirmation {
-                        TextField("Confirmation Message", text: $taskManager.userSettings.deleteConfirmationText)
+                        TextField("Confirmation Message", text: Binding(
+                            get: { taskManager.userSettings.deleteConfirmationText },
+                            set: { newValue in
+                                taskManager.updateDeleteConfirmation(
+                                    show: taskManager.userSettings.showDeleteConfirmation,
+                                    text: newValue
+                                )
+                            }
+                        ))
                     }
                 }
             }
             .navigationTitle("Settings")
             .navigationBarItems(trailing: Button("Done") {
-                taskManager.saveSettings()
                 dismiss()
             })
         }
