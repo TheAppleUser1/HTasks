@@ -247,6 +247,7 @@ struct Task: Identifiable, Codable {
     var completionDate: Date?
     var category: TaskCategory
     var priority: TaskPriority
+    var lastModified: Date
     
     init(id: UUID = UUID(), title: String, isCompleted: Bool = false, dueDate: Date? = nil, completionDate: Date? = nil, category: TaskCategory = .personal, priority: TaskPriority = .medium) {
         self.id = id
@@ -256,6 +257,7 @@ struct Task: Identifiable, Codable {
         self.completionDate = completionDate
         self.category = category
         self.priority = priority
+        self.lastModified = Date()
     }
 }
 
@@ -296,6 +298,7 @@ struct ContentView: View {
     @State private var isWelcomeActive = true
     @State private var tasks: [Task] = []
     @Environment(\.colorScheme) var colorScheme
+    @State private var dataVersion = 1
     
     var body: some View {
         NavigationView {
@@ -315,22 +318,89 @@ struct ContentView: View {
                 isWelcomeActive = false
             }
         }
+        .onChange(of: tasks) { _, newTasks in
+            saveTasks(newTasks)
+        }
     }
     
     private func loadTasks() {
+        // Check data version
+        let savedVersion = UserDefaults.standard.integer(forKey: "dataVersion")
+        if savedVersion < dataVersion {
+            // Handle data migration if needed
+            migrateData(from: savedVersion)
+        }
+        
         if let savedTasks = UserDefaults.standard.data(forKey: "savedTasks") {
             do {
                 let decodedTasks = try JSONDecoder().decode([Task].self, from: savedTasks)
-                self.tasks = decodedTasks
                 
-                // Log for debugging
-                print("Loaded \(decodedTasks.count) tasks from UserDefaults")
+                // Remove duplicates based on title and category
+                var uniqueTasks: [Task] = []
+                for task in decodedTasks {
+                    if !uniqueTasks.contains(where: { $0.title == task.title && $0.category == task.category }) {
+                        uniqueTasks.append(task)
+                    }
+                }
+                
+                self.tasks = uniqueTasks
+                print("Loaded \(uniqueTasks.count) tasks from UserDefaults")
             } catch {
                 print("Failed to decode tasks: \(error.localizedDescription)")
+                // Attempt to recover by loading backup if available
+                if let backupData = UserDefaults.standard.data(forKey: "savedTasks_backup") {
+                    do {
+                        let backupTasks = try JSONDecoder().decode([Task].self, from: backupData)
+                        self.tasks = backupTasks
+                        print("Recovered \(backupTasks.count) tasks from backup")
+                    } catch {
+                        print("Failed to recover from backup: \(error.localizedDescription)")
+                    }
+                }
             }
         } else {
             print("No saved tasks found in UserDefaults")
         }
+    }
+    
+    private func saveTasks(_ tasks: [Task]) {
+        do {
+            // Create backup before saving
+            if let currentData = UserDefaults.standard.data(forKey: "savedTasks") {
+                UserDefaults.standard.set(currentData, forKey: "savedTasks_backup")
+            }
+            
+            let encoded = try JSONEncoder().encode(tasks)
+            UserDefaults.standard.set(encoded, forKey: "savedTasks")
+            UserDefaults.standard.set(dataVersion, forKey: "dataVersion")
+            UserDefaults.standard.synchronize()
+            print("Successfully saved \(tasks.count) tasks")
+        } catch {
+            print("Failed to encode tasks: \(error.localizedDescription)")
+        }
+    }
+    
+    private func migrateData(from version: Int) {
+        // Handle data migration between versions
+        if version < 1 {
+            // Migration logic for version 1
+            if let oldData = UserDefaults.standard.data(forKey: "savedTasks") {
+                do {
+                    let oldTasks = try JSONDecoder().decode([Task].self, from: oldData)
+                    var migratedTasks: [Task] = []
+                    for task in oldTasks {
+                        var migratedTask = task
+                        migratedTask.lastModified = Date()
+                        migratedTasks.append(migratedTask)
+                    }
+                    let encoded = try JSONEncoder().encode(migratedTasks)
+                    UserDefaults.standard.set(encoded, forKey: "savedTasks")
+                } catch {
+                    print("Failed to migrate data: \(error.localizedDescription)")
+                }
+            }
+        }
+        UserDefaults.standard.set(dataVersion, forKey: "dataVersion")
     }
 }
 
@@ -558,7 +628,7 @@ struct WelcomeView: View {
             priority: selectedPriority
         )
         tasks.append(newTask)
-        saveTasks()
+        saveTasks(tasks)
         
         if withDate {
             scheduleNotification(for: newTask)
@@ -597,17 +667,6 @@ struct WelcomeView: View {
                 let reminderRequest = UNNotificationRequest(identifier: "\(task.id.uuidString)-reminder", content: reminderContent, trigger: reminderTrigger)
                 UNUserNotificationCenter.current().add(reminderRequest)
             }
-        }
-    }
-    
-    private func saveTasks() {
-        do {
-            let encoded = try JSONEncoder().encode(tasks)
-            UserDefaults.standard.set(encoded, forKey: "savedTasks")
-            UserDefaults.standard.synchronize()
-            print("Successfully saved \(tasks.count) tasks from WelcomeView")
-        } catch {
-            print("Failed to encode tasks: \(error.localizedDescription)")
         }
     }
 }
@@ -1079,10 +1138,13 @@ struct HomeView: View {
     
     private func toggleTaskCompletion(_ task: Task) {
         if let index = tasks.firstIndex(where: { $0.id == task.id }) {
-            tasks[index].isCompleted.toggle()
-            tasks[index].completionDate = tasks[index].isCompleted ? Date() : nil
+            var updatedTask = tasks[index]
+            updatedTask.isCompleted.toggle()
+            updatedTask.completionDate = updatedTask.isCompleted ? Date() : nil
+            updatedTask.lastModified = Date()
+            tasks[index] = updatedTask
             
-            if tasks[index].isCompleted {
+            if updatedTask.isCompleted {
                 UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [task.id.uuidString])
             } else if let dueDate = task.dueDate {
                 scheduleNotification(for: task, at: dueDate)
@@ -1095,7 +1157,7 @@ struct HomeView: View {
             // Check for newly completed achievements
             for (index, achievement) in settings.stats.achievements.enumerated() {
                 if achievement.isUnlocked && !previousAchievements[index].isUnlocked {
-                    print("Achievement unlocked: \(achievement.title)") // Debug print
+                    print("Achievement unlocked: \(achievement.title)")
                     sendAchievementNotification(for: achievement)
                     break
                 }
@@ -1129,31 +1191,23 @@ struct HomeView: View {
             category: selectedCategory,
             priority: selectedPriority
         )
-        tasks.append(newTask)
-        saveTasks()
         
-        if withDate {
-            scheduleNotification(for: newTask, at: newTaskDueDate)
+        // Check for duplicate tasks based on title and category
+        if !tasks.contains(where: { $0.title == newTask.title && $0.category == newTask.category }) {
+            tasks.append(newTask)
+            
+            if withDate {
+                scheduleNotification(for: newTask, at: newTaskDueDate)
+            }
+            
+            selectedPriority = .easy
+            selectedCategory = .personal
         }
-        
-        selectedPriority = .easy
-        selectedCategory = .personal
     }
     
     private func deleteTask(_ task: Task) {
         tasks.removeAll { $0.id == task.id }
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [task.id.uuidString])
-    }
-    
-    private func saveTasks() {
-        do {
-            let encoded = try JSONEncoder().encode(tasks)
-            UserDefaults.standard.set(encoded, forKey: "savedTasks")
-            UserDefaults.standard.synchronize()
-            print("Successfully saved \(tasks.count) tasks from HomeView")
-        } catch {
-            print("Failed to encode tasks: \(error.localizedDescription)")
-        }
     }
     
     private func loadSettings() {
