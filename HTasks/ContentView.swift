@@ -618,19 +618,17 @@ struct HomeView: View {
     @State private var showingDeleteAlert = false
     @State private var showingAddTaskSheet = false
     @State private var showingSettingsSheet = false
-    @State private var showingAchievementsSheet = false
+    @State private var showingAchievements = false
     @State private var newTaskTitle = ""
     @State private var newTaskDueDate: Date = Date()
     @State private var showDatePicker = false
     @State private var settings = UserSettings.defaultSettings
     @State private var completedAchievement: Achievement?
     @State private var showAchievementBanner = false
+    @State private var showingStatisticsSheet = false
     @Environment(\.colorScheme) var colorScheme
     @State private var selectedPriority: TaskPriority = .easy
     @State private var selectedCategory: TaskCategory = .personal
-    @State private var showingStatisticsSheet = false
-    @State private var showingAchievements = false
-    @State private var showingInsights = false
     
     var completedTasksCount: Int {
         tasks.filter { $0.isCompleted }.count
@@ -751,9 +749,6 @@ struct HomeView: View {
             }
             .navigationDestination(isPresented: $showingAchievements) {
                 AchievementsView(tasks: $tasks)
-            }
-            .navigationDestination(isPresented: $showingInsights) {
-                TaskInsightsView(tasks: $tasks)
             }
         }
         .onAppear {
