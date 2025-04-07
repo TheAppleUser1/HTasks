@@ -272,7 +272,7 @@ struct Task: Identifiable, Codable, Equatable {
     }
 }
 
-struct UserSettings: Codable {
+struct UserSettings: Codable, Equatable {
     var name: String
     var streak: Int
     var totalTasksCompleted: Int
