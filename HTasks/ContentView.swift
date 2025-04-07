@@ -306,95 +306,45 @@ struct UserSettings: Codable {
 }
 
 struct ContentView: View {
+    @StateObject private var firebaseManager = FirebaseManager.shared
     @State private var isWelcomeActive = true
     @State private var tasks: [Task] = []
+    @State private var settings = UserSettings.defaultSettings
     @Environment(\.colorScheme) var colorScheme
     @State private var dataVersion = 1
     
     var body: some View {
-        NavigationView {
-            if isWelcomeActive {
-                WelcomeView(tasks: $tasks, isWelcomeActive: $isWelcomeActive)
+        Group {
+            if !firebaseManager.isAuthenticated {
+                LoginView()
+            } else if isWelcomeActive {
+                WelcomeView(tasks: $tasks, isWelcomeActive: $isWelcomeActive, settings: $settings)
             } else {
-                HomeView(tasks: $tasks)
-            }
-        }
-        .navigationViewStyle(StackNavigationViewStyle())
-        .onAppear {
-            loadTasks()
-            
-            // Check if we should skip welcome screen
-            let hasSeenWelcome = UserDefaults.standard.bool(forKey: "hasSeenWelcome")
-            if hasSeenWelcome && !tasks.isEmpty {
-                isWelcomeActive = false
+                HomeView(tasks: $tasks, settings: $settings)
             }
         }
         .onChange(of: tasks) { _, newTasks in
-            saveTasks(newTasks)
-        }
-    }
-    
-    private func loadTasks() {
-        // Check data version
-        let savedVersion = UserDefaults.standard.integer(forKey: "dataVersion")
-        if savedVersion < dataVersion {
-            migrateData(from: savedVersion)
-        }
-        
-        if let savedTasks = UserDefaults.standard.data(forKey: "savedTasks") {
-            do {
-                let decodedTasks = try JSONDecoder().decode([Task].self, from: savedTasks)
-                
-                // Remove duplicates based on title and category
-                var uniqueTasks: [Task] = []
-                for task in decodedTasks {
-                    if !uniqueTasks.contains(where: { $0.title == task.title && $0.category == task.category }) {
-                        uniqueTasks.append(task)
-                    }
-                }
-                
-                self.tasks = uniqueTasks
-                print("Loaded \(uniqueTasks.count) tasks from UserDefaults")
-            } catch {
-                print("Failed to decode tasks: \(error.localizedDescription)")
-            }
-        } else {
-            print("No saved tasks found in UserDefaults")
-        }
-    }
-    
-    private func saveTasks(_ tasks: [Task]) {
-        do {
-            let encoded = try JSONEncoder().encode(tasks)
-            UserDefaults.standard.set(encoded, forKey: "savedTasks")
-            UserDefaults.standard.set(dataVersion, forKey: "dataVersion")
-            UserDefaults.standard.synchronize()
-            print("Successfully saved \(tasks.count) tasks")
-        } catch {
-            print("Failed to encode tasks: \(error.localizedDescription)")
-        }
-    }
-    
-    private func migrateData(from version: Int) {
-        // Handle data migration between versions
-        if version < 1 {
-            if let oldData = UserDefaults.standard.data(forKey: "savedTasks") {
-                do {
-                    let oldTasks = try JSONDecoder().decode([Task].self, from: oldData)
-                    var migratedTasks: [Task] = []
-                    for task in oldTasks {
-                        var migratedTask = task
-                        migratedTask.lastModified = Date()
-                        migratedTasks.append(migratedTask)
-                    }
-                    let encoded = try JSONEncoder().encode(migratedTasks)
-                    UserDefaults.standard.set(encoded, forKey: "savedTasks")
-                } catch {
-                    print("Failed to migrate data: \(error.localizedDescription)")
-                }
+            Task {
+                try? await firebaseManager.saveUserData(tasks: newTasks, settings: settings)
             }
         }
-        UserDefaults.standard.set(dataVersion, forKey: "dataVersion")
+        .onChange(of: settings) { _, newSettings in
+            Task {
+                try? await firebaseManager.saveUserData(tasks: tasks, settings: newSettings)
+            }
+        }
+        .onAppear {
+            loadInitialData()
+        }
+    }
+    
+    private func loadInitialData() {
+        Task {
+            if let (loadedTasks, loadedSettings) = try? await firebaseManager.loadUserData() {
+                tasks = loadedTasks
+                settings = loadedSettings
+            }
+        }
     }
 }
 
@@ -404,7 +354,7 @@ struct WelcomeView: View {
     @State private var newTaskTitle: String = ""
     @State private var dueDate: Date = Date()
     @State private var showDatePicker = false
-    @State private var settings = UserSettings.defaultSettings
+    @Binding var settings: UserSettings
     @Environment(\.colorScheme) var colorScheme
     @State private var selectedPriority: TaskPriority = .easy
     @State private var selectedCategory: TaskCategory = .personal
@@ -675,7 +625,7 @@ struct HomeView: View {
     @State private var newTaskTitle = ""
     @State private var newTaskDueDate: Date = Date()
     @State private var showDatePicker = false
-    @State private var settings = UserSettings.defaultSettings
+    @Binding var settings: UserSettings
     @Environment(\.colorScheme) var colorScheme
     @State private var selectedPriority: TaskPriority = .easy
     @State private var selectedCategory: TaskCategory = .personal
