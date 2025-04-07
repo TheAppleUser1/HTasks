@@ -158,7 +158,7 @@ struct Achievement: Identifiable, Codable {
     }
 }
 
-struct TaskStats: Codable {
+struct TaskStats: Codable, Equatable {
     var currentStreak: Int = 0
     var longestStreak: Int = 0
     var totalTasksCompleted: Int = 0
