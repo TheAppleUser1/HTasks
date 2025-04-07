@@ -1048,12 +1048,7 @@ struct HomeView: View {
                 Spacer()
                 
                 Button(action: {
-                    do {
-                        try FirebaseManager.shared.signOut()
-                        showingSettingsSheet = false
-                    } catch {
-                        print("Error signing out: \(error.localizedDescription)")
-                    }
+                    showingSettingsSheet = false
                 }) {
                     Text("Sign Out")
                         .fontWeight(.medium)
