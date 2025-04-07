@@ -59,11 +59,15 @@ struct LoginView: View {
                             .font(.caption)
                     }
                     
-                    AuthButton(isSignUp: isSignUp, isLoading: isLoading) {
-                        Task {
-                            await handleAuth()
+                    AuthButton(
+                        isSignUp: isSignUp,
+                        isLoading: isLoading,
+                        action: {
+                            Task {
+                                await handleAuth()
+                            }
                         }
-                    }
+                    )
                 }
                 .padding(.horizontal)
                 
