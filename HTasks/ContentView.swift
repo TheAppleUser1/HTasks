@@ -322,12 +322,12 @@ struct ContentView: View {
                 HomeView(tasks: $tasks, settings: $settings)
             }
         }
-        .onChange(of: tasks) { oldValue, newValue in
+        .onChange(of: tasks) { _, newValue in
             Task {
                 try? await firebaseManager.saveUserData(tasks: newValue, settings: settings)
             }
         }
-        .onChange(of: settings) { oldValue, newValue in
+        .onChange(of: settings) { _, newValue in
             Task {
                 try? await firebaseManager.saveUserData(tasks: tasks, settings: newValue)
             }
