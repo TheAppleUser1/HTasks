@@ -19,20 +19,27 @@ class FirebaseManager: ObservableObject {
     
     @Published var currentUser: User?
     @Published var isAuthenticated = false
+    private var authStateListenerHandle: AuthStateDidChangeListenerHandle?
     
     private init() {
         setupFirebase()
+        setupAuthListener()
     }
     
     private func setupFirebase() {
         FirebaseApp.configure()
-        setupAuthStateListener()
     }
     
-    private func setupAuthStateListener() {
-        Auth.auth().addStateDidChangeListener { [weak self] _, user in
+    private func setupAuthListener() {
+        authStateListenerHandle = Auth.auth().addStateDidChangeListener { [weak self] _, user in
             self?.currentUser = user
             self?.isAuthenticated = user != nil
+        }
+    }
+    
+    deinit {
+        if let handle = authStateListenerHandle {
+            Auth.auth().removeStateDidChangeListener(handle)
         }
     }
     
