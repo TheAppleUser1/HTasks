@@ -36,7 +36,7 @@ struct LoginView: View {
                         Task {
                             await handleAuth()
                         }
-                    }) {
+                    }, label: {
                         if isLoading {
                             ProgressView()
                                 .progressViewStyle(CircularProgressViewStyle(tint: colorScheme == .dark ? .white : .black))
@@ -44,7 +44,7 @@ struct LoginView: View {
                             Text(isSignUp ? "Sign Up" : "Sign In")
                                 .fontWeight(.semibold)
                         }
-                    }
+                    })
                     .frame(maxWidth: .infinity)
                     .padding()
                     .background(
