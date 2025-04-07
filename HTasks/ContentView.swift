@@ -933,6 +933,9 @@ struct HomeView: View {
                 }
             }
             .tint(colorScheme == .dark ? .white : .black)
+            .presentationDragIndicator(.visible)
+            .presentationBackground(Color.clear)
+            .interactiveDismissDisabled(false)
         }
         .sheet(isPresented: $showingAddTaskSheet) {
             VStack(spacing: 16) {
