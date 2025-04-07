@@ -1,5 +1,32 @@
 import SwiftUI
 
+struct AuthButton: View {
+    let isSignUp: Bool
+    let isLoading: Bool
+    let action: () -> Void
+    @Environment(\.colorScheme) var colorScheme
+    
+    var body: some View {
+        Button(action: action) {
+            if isLoading {
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: colorScheme == .dark ? .white : .black))
+            } else {
+                Text(isSignUp ? "Sign Up" : "Sign In")
+                    .fontWeight(.semibold)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(colorScheme == .dark ? Color.blue.opacity(0.7) : Color.blue)
+        )
+        .foregroundColor(colorScheme == .dark ? .white : .black)
+        .disabled(isLoading)
+    }
+}
+
 struct LoginView: View {
     @StateObject private var firebaseManager = FirebaseManager.shared
     @State private var email = ""
@@ -32,27 +59,11 @@ struct LoginView: View {
                             .font(.caption)
                     }
                     
-                    Button(action: {
+                    AuthButton(isSignUp: isSignUp, isLoading: isLoading) {
                         Task {
                             await handleAuth()
                         }
-                    }, label: {
-                        if isLoading {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: colorScheme == .dark ? .white : .black))
-                        } else {
-                            Text(isSignUp ? "Sign Up" : "Sign In")
-                                .fontWeight(.semibold)
-                        }
-                    })
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(colorScheme == .dark ? Color.blue.opacity(0.7) : Color.blue)
-                    )
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
-                    .disabled(isLoading)
+                    }
                 }
                 .padding(.horizontal)
                 
