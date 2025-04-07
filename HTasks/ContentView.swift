@@ -862,55 +862,7 @@ struct HomeView: View {
         })
         .fullScreenCover(isPresented: $showingAchievements) {
             NavigationView {
-                VStack(spacing: 24) {
-                    List {
-                        ForEach(settings.stats.achievements) { achievement in
-                            VStack(alignment: .leading, spacing: 8) {
-                                HStack(spacing: 16) {
-                                    Image(systemName: achievement.icon)
-                                        .font(.title2)
-                                        .foregroundColor(achievement.isUnlocked ? .yellow : .gray)
-                                        .frame(width: 40)
-                                    
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        HStack {
-                                            Text(achievement.title)
-                                                .font(.headline)
-                                                .foregroundColor(colorScheme == .dark ? .white : .black)
-                                            
-                                            if achievement.isUnlocked {
-                                                Image(systemName: "checkmark.circle.fill")
-                                                    .foregroundColor(.green)
-                                            }
-                                        }
-                                        
-                                        Text(achievement.description)
-                                            .font(.subheadline)
-                                            .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
-                                    }
-                                    
-                                    Spacer()
-                                }
-                                
-                                if achievement.id.showsProgress && !achievement.isUnlocked {
-                                    let progress = achievement.id.progress(stats: settings.stats)
-                                    ProgressView(value: Double(progress.current), total: Double(progress.total))
-                                        .tint(achievement.isUnlocked ? .green : .blue)
-                                        .padding(.leading, 56)
-                                    
-                                    Text("\(progress.current)/\(progress.total)")
-                                        .font(.caption)
-                                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
-                                        .padding(.leading, 56)
-                                }
-                            }
-                            .padding(.vertical, 8)
-                            .opacity(achievement.isUnlocked ? 1.0 : 0.6)
-                        }
-                    }
-                    .listStyle(PlainListStyle())
-                }
-                .background(
+                ZStack {
                     LinearGradient(
                         gradient: Gradient(colors: colorScheme == .dark ? 
                                           [Color.black, Color.blue.opacity(0.2)] : 
@@ -919,7 +871,57 @@ struct HomeView: View {
                         endPoint: .bottom
                     )
                     .edgesIgnoringSafeArea(.all)
-                )
+                    
+                    VStack(spacing: 24) {
+                        List {
+                            ForEach(settings.stats.achievements) { achievement in
+                                VStack(alignment: .leading, spacing: 8) {
+                                    HStack(spacing: 16) {
+                                        Image(systemName: achievement.icon)
+                                            .font(.title2)
+                                            .foregroundColor(achievement.isUnlocked ? .yellow : .gray)
+                                            .frame(width: 40)
+                                        
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            HStack {
+                                                Text(achievement.title)
+                                                    .font(.headline)
+                                                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                                                
+                                                if achievement.isUnlocked {
+                                                    Image(systemName: "checkmark.circle.fill")
+                                                        .foregroundColor(.green)
+                                                }
+                                            }
+                                            
+                                            Text(achievement.description)
+                                                .font(.subheadline)
+                                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
+                                        }
+                                        
+                                        Spacer()
+                                    }
+                                    
+                                    if achievement.id.showsProgress && !achievement.isUnlocked {
+                                        let progress = achievement.id.progress(stats: settings.stats)
+                                        ProgressView(value: Double(progress.current), total: Double(progress.total))
+                                            .tint(achievement.isUnlocked ? .green : .blue)
+                                            .padding(.leading, 56)
+                                        
+                                        Text("\(progress.current)/\(progress.total)")
+                                            .font(.caption)
+                                            .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
+                                            .padding(.leading, 56)
+                                    }
+                                }
+                                .padding(.vertical, 8)
+                                .opacity(achievement.isUnlocked ? 1.0 : 0.6)
+                            }
+                        }
+                        .listStyle(PlainListStyle())
+                        .scrollContentBackground(.hidden)
+                    }
+                }
                 .navigationTitle("Achievements")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -933,6 +935,7 @@ struct HomeView: View {
                     }
                 }
             }
+            .interactiveDismissDisabled(false)
         }
         .sheet(isPresented: $showingAddTaskSheet) {
             VStack(spacing: 16) {
