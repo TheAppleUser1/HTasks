@@ -28,7 +28,6 @@ struct AuthButton: View {
 }
 
 struct LoginView: View {
-    @StateObject private var firebaseManager = FirebaseManager.shared
     @State private var email = ""
     @State private var password = ""
     @State private var isSignUp = false
@@ -63,9 +62,7 @@ struct LoginView: View {
                         isSignUp: isSignUp,
                         isLoading: isLoading,
                         action: {
-                            Task {
-                                await handleAuth()
-                            }
+                            handleAuth()
                         }
                     )
                 }
@@ -96,20 +93,15 @@ struct LoginView: View {
         }
     }
     
-    private func handleAuth() async {
+    private func handleAuth() {
         isLoading = true
         errorMessage = ""
         
-        do {
-            if isSignUp {
-                try await firebaseManager.signUp(email: email, password: password)
-            } else {
-                try await firebaseManager.signIn(email: email, password: password)
-            }
-        } catch {
-            errorMessage = error.localizedDescription
+        // Simulate authentication
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            isLoading = false
+            // For demo purposes, just show a success message
+            errorMessage = "Authentication successful!"
         }
-        
-        isLoading = false
     }
 } 

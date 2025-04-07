@@ -306,7 +306,6 @@ struct UserSettings: Codable {
 }
 
 struct ContentView: View {
-    @StateObject private var firebaseManager = FirebaseManager.shared
     @State private var isWelcomeActive = true
     @State private var tasks: [Task] = []
     @State private var settings = UserSettings.defaultSettings
@@ -314,23 +313,17 @@ struct ContentView: View {
     
     var body: some View {
         Group {
-            if !firebaseManager.isAuthenticated {
-                LoginView()
-            } else if isWelcomeActive {
+            if isWelcomeActive {
                 WelcomeView(tasks: $tasks, isWelcomeActive: $isWelcomeActive, settings: $settings)
             } else {
                 HomeView(tasks: $tasks, settings: $settings)
             }
         }
         .onChange(of: tasks) { _, newValue in
-            Task {
-                try? await firebaseManager.saveUserData(tasks: newValue, settings: settings)
-            }
+            saveTasks(newValue)
         }
         .onChange(of: settings) { _, newValue in
-            Task {
-                try? await firebaseManager.saveUserData(tasks: tasks, settings: newValue)
-            }
+            saveSettings(newValue)
         }
         .onAppear {
             loadInitialData()
@@ -338,11 +331,26 @@ struct ContentView: View {
     }
     
     private func loadInitialData() {
-        Task {
-            if let (loadedTasks, loadedSettings) = try? await firebaseManager.loadUserData() {
-                tasks = loadedTasks
-                settings = loadedSettings
-            }
+        if let savedTasks = UserDefaults.standard.data(forKey: "tasks"),
+           let decodedTasks = try? JSONDecoder().decode([Task].self, from: savedTasks) {
+            tasks = decodedTasks
+        }
+        
+        if let savedSettings = UserDefaults.standard.data(forKey: "userSettings"),
+           let decodedSettings = try? JSONDecoder().decode(UserSettings.self, from: savedSettings) {
+            settings = decodedSettings
+        }
+    }
+    
+    private func saveTasks(_ tasks: [Task]) {
+        if let encoded = try? JSONEncoder().encode(tasks) {
+            UserDefaults.standard.set(encoded, forKey: "tasks")
+        }
+    }
+    
+    private func saveSettings(_ settings: UserSettings) {
+        if let encoded = try? JSONEncoder().encode(settings) {
+            UserDefaults.standard.set(encoded, forKey: "userSettings")
         }
     }
 }
