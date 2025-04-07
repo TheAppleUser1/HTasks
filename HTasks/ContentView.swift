@@ -1041,6 +1041,26 @@ struct HomeView: View {
                 Spacer()
                 
                 Button(action: {
+                    do {
+                        try FirebaseManager.shared.signOut()
+                        showingSettingsSheet = false
+                    } catch {
+                        print("Error signing out: \(error.localizedDescription)")
+                    }
+                }) {
+                    Text("Sign Out")
+                        .fontWeight(.medium)
+                        .padding()
+                        .frame(maxWidth: .infinity)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(Color.red.opacity(0.7))
+                        )
+                        .foregroundColor(.white)
+                }
+                .padding(.horizontal)
+                
+                Button(action: {
                     showingSettingsSheet = false
                 }) {
                     Text("Done")
