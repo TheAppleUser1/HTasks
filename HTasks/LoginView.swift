@@ -32,11 +32,11 @@ struct LoginView: View {
                             .font(.caption)
                     }
                     
-                    Button {
+                    Button(action: {
                         Task {
                             await handleAuth()
                         }
-                    } label: {
+                    }) {
                         if isLoading {
                             ProgressView()
                                 .progressViewStyle(CircularProgressViewStyle(tint: colorScheme == .dark ? .white : .black))
