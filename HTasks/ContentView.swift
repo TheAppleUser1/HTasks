@@ -311,7 +311,6 @@ struct ContentView: View {
     @State private var tasks: [Task] = []
     @State private var settings = UserSettings.defaultSettings
     @Environment(\.colorScheme) var colorScheme
-    @State private var dataVersion = 1
     
     var body: some View {
         Group {

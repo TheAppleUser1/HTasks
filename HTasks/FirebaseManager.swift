@@ -3,6 +3,16 @@ import FirebaseCore
 import FirebaseAuth
 import FirebaseFirestore
 
+extension Dictionary {
+    func mapKeys<T>(_ transform: (Key) throws -> T) rethrows -> [T: Value] {
+        var result: [T: Value] = [:]
+        for (key, value) in self {
+            result[try transform(key)] = value
+        }
+        return result
+    }
+}
+
 class FirebaseManager: ObservableObject {
     static let shared = FirebaseManager()
     private let db = Firestore.firestore()
@@ -97,8 +107,7 @@ class FirebaseManager: ObservableObject {
                   let title = taskData["title"] as? String,
                   let isCompleted = taskData["isCompleted"] as? Bool,
                   let category = TaskCategory(rawValue: taskData["category"] as? String ?? ""),
-                  let priority = TaskPriority(rawValue: taskData["priority"] as? String ?? ""),
-                  let lastModified = taskData["lastModified"] as? Date else {
+                  let priority = TaskPriority(rawValue: taskData["priority"] as? String ?? "") else {
                 return nil
             }
             
@@ -109,8 +118,7 @@ class FirebaseManager: ObservableObject {
                 dueDate: taskData["dueDate"] as? Date,
                 completionDate: taskData["completionDate"] as? Date,
                 category: category,
-                priority: priority,
-                lastModified: lastModified
+                priority: priority
             )
         }
         
