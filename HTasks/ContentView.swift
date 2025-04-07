@@ -670,7 +670,7 @@ struct HomeView: View {
     @State private var showingDeleteAlert = false
     @State private var showingAddTaskSheet = false
     @State private var showingSettingsSheet = false
-    @State private var showingAchievementsSheet = false
+    @State private var showingAchievements = false
     @State private var showingStatisticsSheet = false
     @State private var newTaskTitle = ""
     @State private var newTaskDueDate: Date = Date()
@@ -841,7 +841,7 @@ struct HomeView: View {
         .navigationTitle("My Tasks")
         .navigationBarItems(trailing: HStack(spacing: 16) {
             Button(action: {
-                showingAchievementsSheet = true
+                showingAchievements = true
             }) {
                 Image(systemName: "trophy.fill")
                     .font(.title2)
@@ -860,6 +860,80 @@ struct HomeView: View {
                     .contentShape(Rectangle())
             }
         })
+        .fullScreenCover(isPresented: $showingAchievements) {
+            NavigationView {
+                VStack(spacing: 24) {
+                    List {
+                        ForEach(settings.stats.achievements) { achievement in
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack(spacing: 16) {
+                                    Image(systemName: achievement.icon)
+                                        .font(.title2)
+                                        .foregroundColor(achievement.isUnlocked ? .yellow : .gray)
+                                        .frame(width: 40)
+                                    
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        HStack {
+                                            Text(achievement.title)
+                                                .font(.headline)
+                                                .foregroundColor(colorScheme == .dark ? .white : .black)
+                                            
+                                            if achievement.isUnlocked {
+                                                Image(systemName: "checkmark.circle.fill")
+                                                    .foregroundColor(.green)
+                                            }
+                                        }
+                                        
+                                        Text(achievement.description)
+                                            .font(.subheadline)
+                                            .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
+                                    }
+                                    
+                                    Spacer()
+                                }
+                                
+                                if achievement.id.showsProgress && !achievement.isUnlocked {
+                                    let progress = achievement.id.progress(stats: settings.stats)
+                                    ProgressView(value: Double(progress.current), total: Double(progress.total))
+                                        .tint(achievement.isUnlocked ? .green : .blue)
+                                        .padding(.leading, 56)
+                                    
+                                    Text("\(progress.current)/\(progress.total)")
+                                        .font(.caption)
+                                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
+                                        .padding(.leading, 56)
+                                }
+                            }
+                            .padding(.vertical, 8)
+                            .opacity(achievement.isUnlocked ? 1.0 : 0.6)
+                        }
+                    }
+                    .listStyle(PlainListStyle())
+                }
+                .background(
+                    LinearGradient(
+                        gradient: Gradient(colors: colorScheme == .dark ? 
+                                          [Color.black, Color.blue.opacity(0.2)] : 
+                                          [Color.white, Color.blue.opacity(0.1)]),
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .edgesIgnoringSafeArea(.all)
+                )
+                .navigationTitle("Achievements")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button(action: {
+                            showingAchievements = false
+                        }) {
+                            Image(systemName: "chevron.left")
+                                .foregroundColor(colorScheme == .dark ? .white : .black)
+                        }
+                    }
+                }
+            }
+        }
         .sheet(isPresented: $showingAddTaskSheet) {
             VStack(spacing: 16) {
                 Text("Add New Task")
@@ -1016,81 +1090,6 @@ struct HomeView: View {
                 
                 Button(action: {
                     showingSettingsSheet = false
-                }) {
-                    Text("Done")
-                        .fontWeight(.medium)
-                        .padding()
-                        .frame(maxWidth: .infinity)
-                        .background(
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(colorScheme == .dark ? Color.blue.opacity(0.7) : Color.blue)
-                        )
-                        .foregroundColor(colorScheme == .dark ? .white : .black)
-                }
-                .padding()
-            }
-            .background(
-                colorScheme == .dark ? Color.black : Color.white
-            )
-            .presentationDetents([.medium])
-        }
-        .sheet(isPresented: $showingAchievementsSheet) {
-            VStack(spacing: 24) {
-                Text("Achievements")
-                    .font(.title)
-                    .fontWeight(.bold)
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
-                    .padding(.top, 20)
-                
-                List {
-                    ForEach(settings.stats.achievements) { achievement in
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack(spacing: 16) {
-                                Image(systemName: achievement.icon)
-                                    .font(.title2)
-                                    .foregroundColor(achievement.isUnlocked ? .yellow : .gray)
-                                    .frame(width: 40)
-                                
-                                VStack(alignment: .leading, spacing: 4) {
-                                    HStack {
-                                        Text(achievement.title)
-                                            .font(.headline)
-                                            .foregroundColor(colorScheme == .dark ? .white : .black)
-                                        
-                                        if achievement.isUnlocked {
-                                            Image(systemName: "checkmark.circle.fill")
-                                                .foregroundColor(.green)
-                                        }
-                                    }
-                                    
-                                    Text(achievement.description)
-                                        .font(.subheadline)
-                                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
-                                }
-                                
-                                Spacer()
-                            }
-                            
-                            if achievement.id.showsProgress && !achievement.isUnlocked {
-                                let progress = achievement.id.progress(stats: settings.stats)
-                                ProgressView(value: Double(progress.current), total: Double(progress.total))
-                                    .tint(achievement.isUnlocked ? .green : .blue)
-                                    .padding(.leading, 56)
-                                
-                                Text("\(progress.current)/\(progress.total)")
-                                    .font(.caption)
-                                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
-                                    .padding(.leading, 56)
-                            }
-                        }
-                        .padding(.vertical, 8)
-                        .opacity(achievement.isUnlocked ? 1.0 : 0.6)
-                    }
-                }
-                .listStyle(PlainListStyle())
-                
-                Button(action: {
-                    showingAchievementsSheet = false
                 }) {
                     Text("Done")
                         .fontWeight(.medium)
