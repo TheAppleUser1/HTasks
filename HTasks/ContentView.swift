@@ -297,6 +297,11 @@ struct ContentView: View {
     @State private var tasks: [Task] = []
     @Environment(\.colorScheme) var colorScheme
     
+    init() {
+        // Set up notification delegate
+        UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
+    }
+    
     var body: some View {
         NavigationView {
             if isWelcomeActive {
@@ -310,11 +315,11 @@ struct ContentView: View {
             loadTasks()
             
             // Request notification permissions when app starts
-            UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
+            UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound, .provisional]) { granted, error in
                 if granted {
-                    print("Notification permission granted")
+                    print("DEBUG: Notification permission granted")
                 } else if let error = error {
-                    print("Notification permission error: \(error.localizedDescription)")
+                    print("DEBUG: Notification permission error: \(error.localizedDescription)")
                 }
             }
             
@@ -340,6 +345,20 @@ struct ContentView: View {
         } else {
             print("No saved tasks found in UserDefaults")
         }
+    }
+}
+
+// Add NotificationDelegate class at the top level of the file
+class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
+    static let shared = NotificationDelegate()
+    
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        // Show notification even when app is in foreground
+        completionHandler([.banner, .sound, .badge])
+    }
+    
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
+        completionHandler()
     }
 }
 
