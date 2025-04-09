@@ -1110,7 +1110,7 @@ struct HomeView: View {
             if granted {
                 let content = UNMutableNotificationContent()
                 content.title = "🎉 Achievement Unlocked!"
-                content.body = "\(achievement.title): \(achievement.description)"
+                content.body = "You completed \(achievement.title) achievement.\nGoal: \(achievement.description)"
                 content.sound = .default
                 
                 let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 0.1, repeats: false)
