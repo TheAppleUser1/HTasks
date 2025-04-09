@@ -1104,7 +1104,8 @@ struct HomeView: View {
             // Check for newly completed achievements
             for (index, achievement) in settings.stats.achievements.enumerated() {
                 if achievement.isUnlocked && !previousAchievements[index].isUnlocked {
-                    print("Achievement unlocked: \(achievement.title)") // Debug print
+                    print("DEBUG: Achievement unlocked: \(achievement.title)")
+                    print("DEBUG: Achievement description: \(achievement.description)")
                     sendAchievementNotification(for: achievement)
                     break
                 }
@@ -1115,6 +1116,9 @@ struct HomeView: View {
     }
     
     private func sendAchievementNotification(for achievement: Achievement) {
+        print("DEBUG: Attempting to send achievement notification")
+        print("DEBUG: Achievement title: \(achievement.title)")
+        
         let content = UNMutableNotificationContent()
         content.title = "🎉 Achievement Unlocked!"
         content.body = "You completed \(achievement.title) achievement.\nGoal: \(achievement.description)"
@@ -1127,10 +1131,18 @@ struct HomeView: View {
         // Add the notification request
         UNUserNotificationCenter.current().add(request) { error in
             if let error = error {
-                print("Error sending achievement notification: \(error.localizedDescription)")
+                print("DEBUG: Error sending achievement notification: \(error.localizedDescription)")
             } else {
-                print("Achievement notification scheduled successfully")
+                print("DEBUG: Achievement notification scheduled successfully")
             }
+        }
+        
+        // Also show a local notification for testing
+        let center = UNUserNotificationCenter.current()
+        center.getNotificationSettings { settings in
+            print("DEBUG: Notification settings - Authorization status: \(settings.authorizationStatus.rawValue)")
+            print("DEBUG: Notification settings - Alert setting: \(settings.alertSetting.rawValue)")
+            print("DEBUG: Notification settings - Sound setting: \(settings.soundSetting.rawValue)")
         }
     }
     
