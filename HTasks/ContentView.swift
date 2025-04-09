@@ -158,7 +158,7 @@ struct Achievement: Identifiable, Codable {
     }
 }
 
-struct TaskStats: Codable, Equatable {
+struct TaskStats: Codable {
     var currentStreak: Int = 0
     var longestStreak: Int = 0
     var totalTasksCompleted: Int = 0
@@ -239,7 +239,7 @@ struct TaskStats: Codable, Equatable {
     }
 }
 
-struct Task: Identifiable, Codable, Equatable {
+struct Task: Identifiable, Codable {
     var id: UUID
     var title: String
     var isCompleted: Bool
@@ -247,7 +247,6 @@ struct Task: Identifiable, Codable, Equatable {
     var completionDate: Date?
     var category: TaskCategory
     var priority: TaskPriority
-    var lastModified: Date
     
     init(id: UUID = UUID(), title: String, isCompleted: Bool = false, dueDate: Date? = nil, completionDate: Date? = nil, category: TaskCategory = .personal, priority: TaskPriority = .medium) {
         self.id = id
@@ -257,22 +256,10 @@ struct Task: Identifiable, Codable, Equatable {
         self.completionDate = completionDate
         self.category = category
         self.priority = priority
-        self.lastModified = Date()
-    }
-    
-    static func == (lhs: Task, rhs: Task) -> Bool {
-        return lhs.id == rhs.id &&
-               lhs.title == rhs.title &&
-               lhs.isCompleted == rhs.isCompleted &&
-               lhs.dueDate == rhs.dueDate &&
-               lhs.completionDate == rhs.completionDate &&
-               lhs.category == rhs.category &&
-               lhs.priority == rhs.priority &&
-               lhs.lastModified == rhs.lastModified
     }
 }
 
-struct UserSettings: Codable, Equatable {
+struct UserSettings: Codable {
     var name: String
     var streak: Int
     var totalTasksCompleted: Int
@@ -308,49 +295,41 @@ struct UserSettings: Codable, Equatable {
 struct ContentView: View {
     @State private var isWelcomeActive = true
     @State private var tasks: [Task] = []
-    @State private var settings = UserSettings.defaultSettings
     @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
-        Group {
+        NavigationView {
             if isWelcomeActive {
-                WelcomeView(tasks: $tasks, isWelcomeActive: $isWelcomeActive, settings: $settings)
+                WelcomeView(tasks: $tasks, isWelcomeActive: $isWelcomeActive)
             } else {
-                HomeView(tasks: $tasks, settings: $settings)
+                HomeView(tasks: $tasks)
             }
         }
-        .onChange(of: tasks) { _, newValue in
-            saveTasks(newValue)
-        }
-        .onChange(of: settings) { _, newValue in
-            saveSettings(newValue)
-        }
+        .navigationViewStyle(StackNavigationViewStyle())
         .onAppear {
-            loadInitialData()
+            loadTasks()
+            
+            // Check if we should skip welcome screen
+            let hasSeenWelcome = UserDefaults.standard.bool(forKey: "hasSeenWelcome")
+            if hasSeenWelcome && !tasks.isEmpty {
+                isWelcomeActive = false
+            }
         }
     }
     
-    private func loadInitialData() {
-        if let savedTasks = UserDefaults.standard.data(forKey: "tasks"),
-           let decodedTasks = try? JSONDecoder().decode([Task].self, from: savedTasks) {
-            tasks = decodedTasks
-        }
-        
-        if let savedSettings = UserDefaults.standard.data(forKey: "userSettings"),
-           let decodedSettings = try? JSONDecoder().decode(UserSettings.self, from: savedSettings) {
-            settings = decodedSettings
-        }
-    }
-    
-    private func saveTasks(_ tasks: [Task]) {
-        if let encoded = try? JSONEncoder().encode(tasks) {
-            UserDefaults.standard.set(encoded, forKey: "tasks")
-        }
-    }
-    
-    private func saveSettings(_ settings: UserSettings) {
-        if let encoded = try? JSONEncoder().encode(settings) {
-            UserDefaults.standard.set(encoded, forKey: "userSettings")
+    private func loadTasks() {
+        if let savedTasks = UserDefaults.standard.data(forKey: "savedTasks") {
+            do {
+                let decodedTasks = try JSONDecoder().decode([Task].self, from: savedTasks)
+                self.tasks = decodedTasks
+                
+                // Log for debugging
+                print("Loaded \(decodedTasks.count) tasks from UserDefaults")
+            } catch {
+                print("Failed to decode tasks: \(error.localizedDescription)")
+            }
+        } else {
+            print("No saved tasks found in UserDefaults")
         }
     }
 }
@@ -361,7 +340,7 @@ struct WelcomeView: View {
     @State private var newTaskTitle: String = ""
     @State private var dueDate: Date = Date()
     @State private var showDatePicker = false
-    @Binding var settings: UserSettings
+    @State private var settings = UserSettings.defaultSettings
     @Environment(\.colorScheme) var colorScheme
     @State private var selectedPriority: TaskPriority = .easy
     @State private var selectedCategory: TaskCategory = .personal
@@ -579,6 +558,7 @@ struct WelcomeView: View {
             priority: selectedPriority
         )
         tasks.append(newTask)
+        saveTasks()
         
         if withDate {
             scheduleNotification(for: newTask)
@@ -619,6 +599,17 @@ struct WelcomeView: View {
             }
         }
     }
+    
+    private func saveTasks() {
+        do {
+            let encoded = try JSONEncoder().encode(tasks)
+            UserDefaults.standard.set(encoded, forKey: "savedTasks")
+            UserDefaults.standard.synchronize()
+            print("Successfully saved \(tasks.count) tasks from WelcomeView")
+        } catch {
+            print("Failed to encode tasks: \(error.localizedDescription)")
+        }
+    }
 }
 
 struct HomeView: View {
@@ -627,12 +618,12 @@ struct HomeView: View {
     @State private var showingDeleteAlert = false
     @State private var showingAddTaskSheet = false
     @State private var showingSettingsSheet = false
-    @State private var showingAchievements = false
+    @State private var showingAchievementsSheet = false
     @State private var showingStatisticsSheet = false
     @State private var newTaskTitle = ""
     @State private var newTaskDueDate: Date = Date()
     @State private var showDatePicker = false
-    @Binding var settings: UserSettings
+    @State private var settings = UserSettings.defaultSettings
     @Environment(\.colorScheme) var colorScheme
     @State private var selectedPriority: TaskPriority = .easy
     @State private var selectedCategory: TaskCategory = .personal
@@ -798,7 +789,7 @@ struct HomeView: View {
         .navigationTitle("My Tasks")
         .navigationBarItems(trailing: HStack(spacing: 16) {
             Button(action: {
-                showingAchievements = true
+                showingAchievementsSheet = true
             }) {
                 Image(systemName: "trophy.fill")
                     .font(.title2)
@@ -817,82 +808,6 @@ struct HomeView: View {
                     .contentShape(Rectangle())
             }
         })
-        .fullScreenCover(isPresented: $showingAchievements) {
-            NavigationStack {
-                List {
-                    ForEach(settings.stats.achievements) { achievement in
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack(spacing: 16) {
-                                Image(systemName: achievement.icon)
-                                    .font(.title2)
-                                    .foregroundColor(achievement.isUnlocked ? .yellow : .gray)
-                                    .frame(width: 40)
-                                
-                                VStack(alignment: .leading, spacing: 4) {
-                                    HStack {
-                                        Text(achievement.title)
-                                            .font(.headline)
-                                            .foregroundColor(colorScheme == .dark ? .white : .black)
-                                        
-                                        if achievement.isUnlocked {
-                                            Image(systemName: "checkmark.circle.fill")
-                                                .foregroundColor(.green)
-                                        }
-                                    }
-                                    
-                                    Text(achievement.description)
-                                        .font(.subheadline)
-                                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
-                                }
-                                
-                                Spacer()
-                            }
-                            
-                            if achievement.id.showsProgress && !achievement.isUnlocked {
-                                let progress = achievement.id.progress(stats: settings.stats)
-                                ProgressView(value: Double(progress.current), total: Double(progress.total))
-                                    .tint(achievement.isUnlocked ? .green : .blue)
-                                    .padding(.leading, 56)
-                                
-                                Text("\(progress.current)/\(progress.total)")
-                                    .font(.caption)
-                                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
-                                    .padding(.leading, 56)
-                            }
-                        }
-                        .padding(.vertical, 8)
-                        .opacity(achievement.isUnlocked ? 1.0 : 0.6)
-                        .listRowBackground(Color.clear)
-                    }
-                }
-                .listStyle(PlainListStyle())
-                .scrollContentBackground(.hidden)
-                .background(
-                    LinearGradient(
-                        gradient: Gradient(colors: colorScheme == .dark ? 
-                                          [Color.black, Color.blue.opacity(0.2)] : 
-                                          [Color.white, Color.blue.opacity(0.1)]),
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .navigationTitle("Achievements")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .navigationBarLeading) {
-                        Button(action: {
-                            showingAchievements = false
-                        }) {
-                            Image(systemName: "chevron.left")
-                                .foregroundColor(colorScheme == .dark ? .white : .black)
-                        }
-                    }
-                }
-            }
-            .tint(colorScheme == .dark ? .white : .black)
-            .presentationDragIndicator(.visible)
-            .interactiveDismissDisabled(false)
-        }
         .sheet(isPresented: $showingAddTaskSheet) {
             VStack(spacing: 16) {
                 Text("Add New Task")
@@ -1050,20 +965,80 @@ struct HomeView: View {
                 Button(action: {
                     showingSettingsSheet = false
                 }) {
-                    Text("Sign Out")
+                    Text("Done")
                         .fontWeight(.medium)
                         .padding()
                         .frame(maxWidth: .infinity)
                         .background(
                             RoundedRectangle(cornerRadius: 10)
-                                .fill(Color.red.opacity(0.7))
+                                .fill(colorScheme == .dark ? Color.blue.opacity(0.7) : Color.blue)
                         )
-                        .foregroundColor(.white)
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
                 }
-                .padding(.horizontal)
+                .padding()
+            }
+            .background(
+                colorScheme == .dark ? Color.black : Color.white
+            )
+            .presentationDetents([.medium])
+        }
+        .sheet(isPresented: $showingAchievementsSheet) {
+            VStack(spacing: 24) {
+                Text("Achievements")
+                    .font(.title)
+                    .fontWeight(.bold)
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                    .padding(.top, 20)
+                
+                List {
+                    ForEach(settings.stats.achievements) { achievement in
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 16) {
+                                Image(systemName: achievement.icon)
+                                    .font(.title2)
+                                    .foregroundColor(achievement.isUnlocked ? .yellow : .gray)
+                                    .frame(width: 40)
+                                
+                                VStack(alignment: .leading, spacing: 4) {
+                                    HStack {
+                                        Text(achievement.title)
+                                            .font(.headline)
+                                            .foregroundColor(colorScheme == .dark ? .white : .black)
+                                        
+                                        if achievement.isUnlocked {
+                                            Image(systemName: "checkmark.circle.fill")
+                                                .foregroundColor(.green)
+                                        }
+                                    }
+                                    
+                                    Text(achievement.description)
+                                        .font(.subheadline)
+                                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
+                                }
+                                
+                                Spacer()
+                            }
+                            
+                            if achievement.id.showsProgress && !achievement.isUnlocked {
+                                let progress = achievement.id.progress(stats: settings.stats)
+                                ProgressView(value: Double(progress.current), total: Double(progress.total))
+                                    .tint(achievement.isUnlocked ? .green : .blue)
+                                    .padding(.leading, 56)
+                                
+                                Text("\(progress.current)/\(progress.total)")
+                                    .font(.caption)
+                                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
+                                    .padding(.leading, 56)
+                            }
+                        }
+                        .padding(.vertical, 8)
+                        .opacity(achievement.isUnlocked ? 1.0 : 0.6)
+                    }
+                }
+                .listStyle(PlainListStyle())
                 
                 Button(action: {
-                    showingSettingsSheet = false
+                    showingAchievementsSheet = false
                 }) {
                     Text("Done")
                         .fontWeight(.medium)
@@ -1104,13 +1079,10 @@ struct HomeView: View {
     
     private func toggleTaskCompletion(_ task: Task) {
         if let index = tasks.firstIndex(where: { $0.id == task.id }) {
-            var updatedTask = tasks[index]
-            updatedTask.isCompleted.toggle()
-            updatedTask.completionDate = updatedTask.isCompleted ? Date() : nil
-            updatedTask.lastModified = Date()
-            tasks[index] = updatedTask
+            tasks[index].isCompleted.toggle()
+            tasks[index].completionDate = tasks[index].isCompleted ? Date() : nil
             
-            if updatedTask.isCompleted {
+            if tasks[index].isCompleted {
                 UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [task.id.uuidString])
             } else if let dueDate = task.dueDate {
                 scheduleNotification(for: task, at: dueDate)
@@ -1123,7 +1095,7 @@ struct HomeView: View {
             // Check for newly completed achievements
             for (index, achievement) in settings.stats.achievements.enumerated() {
                 if achievement.isUnlocked && !previousAchievements[index].isUnlocked {
-                    print("Achievement unlocked: \(achievement.title)")
+                    print("Achievement unlocked: \(achievement.title)") // Debug print
                     sendAchievementNotification(for: achievement)
                     break
                 }
@@ -1157,23 +1129,31 @@ struct HomeView: View {
             category: selectedCategory,
             priority: selectedPriority
         )
+        tasks.append(newTask)
+        saveTasks()
         
-        // Check for duplicate tasks based on title and category
-        if !tasks.contains(where: { $0.title == newTask.title && $0.category == newTask.category }) {
-            tasks.append(newTask)
-            
-            if withDate {
-                scheduleNotification(for: newTask, at: newTaskDueDate)
-            }
-            
-            selectedPriority = .easy
-            selectedCategory = .personal
+        if withDate {
+            scheduleNotification(for: newTask, at: newTaskDueDate)
         }
+        
+        selectedPriority = .easy
+        selectedCategory = .personal
     }
     
     private func deleteTask(_ task: Task) {
         tasks.removeAll { $0.id == task.id }
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [task.id.uuidString])
+    }
+    
+    private func saveTasks() {
+        do {
+            let encoded = try JSONEncoder().encode(tasks)
+            UserDefaults.standard.set(encoded, forKey: "savedTasks")
+            UserDefaults.standard.synchronize()
+            print("Successfully saved \(tasks.count) tasks from HomeView")
+        } catch {
+            print("Failed to encode tasks: \(error.localizedDescription)")
+        }
     }
     
     private func loadSettings() {
