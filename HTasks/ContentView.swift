@@ -309,6 +309,15 @@ struct ContentView: View {
         .onAppear {
             loadTasks()
             
+            // Request notification permissions when app starts
+            UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
+                if granted {
+                    print("Notification permission granted")
+                } else if let error = error {
+                    print("Notification permission error: \(error.localizedDescription)")
+                }
+            }
+            
             // Check if we should skip welcome screen
             let hasSeenWelcome = UserDefaults.standard.bool(forKey: "hasSeenWelcome")
             if hasSeenWelcome && !tasks.isEmpty {
@@ -1106,17 +1115,21 @@ struct HomeView: View {
     }
     
     private func sendAchievementNotification(for achievement: Achievement) {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
-            if granted {
-                let content = UNMutableNotificationContent()
-                content.title = "🎉 Achievement Unlocked!"
-                content.body = "You completed \(achievement.title) achievement.\nGoal: \(achievement.description)"
-                content.sound = .default
-                
-                let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 0.1, repeats: false)
-                let request = UNNotificationRequest(identifier: "achievement-\(achievement.id.rawValue)", content: content, trigger: trigger)
-                
-                UNUserNotificationCenter.current().add(request)
+        let content = UNMutableNotificationContent()
+        content.title = "🎉 Achievement Unlocked!"
+        content.body = "You completed \(achievement.title) achievement.\nGoal: \(achievement.description)"
+        content.sound = .default
+        
+        // Create a trigger that fires immediately
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 0.1, repeats: false)
+        let request = UNNotificationRequest(identifier: "achievement-\(achievement.id.rawValue)", content: content, trigger: trigger)
+        
+        // Add the notification request
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("Error sending achievement notification: \(error.localizedDescription)")
+            } else {
+                print("Achievement notification scheduled successfully")
             }
         }
     }
