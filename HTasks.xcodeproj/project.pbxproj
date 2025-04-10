@@ -23,6 +23,19 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		18D7E5652DA7F14B00B65D91 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		182DBF2E2D98571A006F64D4 /* HTasks.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HTasks.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		182DBF3E2D98571C006F64D4 /* HTasksTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HTasksTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -102,6 +115,7 @@
 				182DBF2A2D98571A006F64D4 /* Sources */,
 				182DBF2B2D98571A006F64D4 /* Frameworks */,
 				182DBF2C2D98571A006F64D4 /* Resources */,
+				18D7E5652DA7F14B00B65D91 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);

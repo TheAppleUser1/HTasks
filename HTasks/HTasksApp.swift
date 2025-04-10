@@ -7,11 +7,17 @@
 
 import SwiftUI
 
+
 @main
 struct HTasksApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
         }
+    }
+    
+    init() {
+        // Register the Control Center widget
+        WidgetCenter.shared.reloadAllTimelines()
     }
 }
