@@ -1,0 +1,35 @@
+{
+  "identifier" : "HTasksStore",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+    {
+      "displayPrice" : "5.00",
+      "familyShareable" : false,
+      "internalID" : "ai_prompts_30",
+      "localizations" : [
+        {
+          "description" : "Get 30 additional AI prompts for your tasks",
+          "displayName" : "30 AI Prompts",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.htasks.aiprompts.30",
+      "referenceName" : "30 AI Prompts",
+      "type" : "NonConsumable"
+    }
+  ],
+  "settings" : {
+    "_applicationInternalID" : "com.htasks",
+    "_developerTeamID" : "YOUR_TEAM_ID",
+    "_lastSynchronizedDate" : 0
+  },
+  "subscriptionGroups" : [
+
+  ],
+  "version" : {
+    "major" : 2,
+    "minor" : 0
+  }
+} 

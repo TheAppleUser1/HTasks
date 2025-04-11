@@ -16,8 +16,4 @@ struct HTasksApp: App {
         }
     }
     
-    init() {
-        // Register the Control Center widget
-        WidgetCenter.shared.reloadAllTimelines()
-    }
 }
