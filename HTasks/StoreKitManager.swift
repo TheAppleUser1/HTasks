@@ -11,18 +11,18 @@ class StoreKitManager: ObservableObject {
     private let productIdentifiers = ["com.htasks.aiprompts.30"]
     
     private init() {
-        setupStoreKit()
+        Task {
+            await setupStoreKit()
+        }
     }
     
-    private func setupStoreKit() {
-        Task {
-            await loadProducts()
-            await updatePurchasedProducts()
-            
-            // Listen for transactions
-            for await result in Transaction.updates {
-                await handle(transactionResult: result)
-            }
+    private func setupStoreKit() async {
+        await loadProducts()
+        await updatePurchasedProducts()
+        
+        // Listen for transactions
+        for await result in Transaction.updates {
+            await handle(transactionResult: result)
         }
     }
     
