@@ -9,21 +9,24 @@ class StoreKitManager: ObservableObject {
     @Published private(set) var purchasedProductIDs = Set<String>()
     
     private let productIdentifiers = ["com.htasks.aiprompts.30"]
+    private var transactionListener: Task<Void, Error>?
     
     private init() {
-        Task {
-            await setupStoreKit()
+        // Initialize the transaction listener
+        transactionListener = Task {
+            for await result in Transaction.updates {
+                await handle(transactionResult: result)
+            }
         }
     }
     
-    private func setupStoreKit() async {
+    deinit {
+        transactionListener?.cancel()
+    }
+    
+    func setup() async {
         await loadProducts()
         await updatePurchasedProducts()
-        
-        // Listen for transactions
-        for await result in Transaction.updates {
-            await handle(transactionResult: result)
-        }
     }
     
     private func handle(transactionResult: VerificationResult<StoreKit.Transaction>) async {
