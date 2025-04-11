@@ -9,13 +9,13 @@ class StoreKitManager: ObservableObject {
     @Published private(set) var purchasedProductIDs = Set<String>()
     
     private let productIdentifiers = ["com.htasks.aiprompts.30"]
-    private var transactionListener: Task<Void, Error>?
+    private var transactionListener: Task<Void, Never>?
     
     private init() {
         // Initialize the transaction listener
-        transactionListener = Task {
+        transactionListener = Task.detached {
             for await result in Transaction.updates {
-                await handle(transactionResult: result)
+                await self.handle(transactionResult: result)
             }
         }
     }
