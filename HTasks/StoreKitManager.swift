@@ -11,9 +11,28 @@ class StoreKitManager: ObservableObject {
     private let productIdentifiers = ["com.htasks.aiprompts.30"]
     
     private init() {
+        // Initialize StoreKit
         Task {
             await loadProducts()
             await updatePurchasedProducts()
+            
+            // Listen for transactions
+            for await result in Transaction.updates {
+                await handle(transactionResult: result)
+            }
+        }
+    }
+    
+    private func handle(transactionResult: VerificationResult<Transaction>) async {
+        do {
+            let transaction = try checkVerified(transactionResult)
+            if transaction.productID == "com.htasks.aiprompts.30" {
+                SecureStorageManager.shared.addPrompts(30)
+            }
+            purchasedProductIDs.insert(transaction.productID)
+            await transaction.finish()
+        } catch {
+            print("Failed to handle transaction: \(error)")
         }
     }
     
@@ -51,7 +70,6 @@ class StoreKitManager: ObservableObject {
             do {
                 let transaction = try checkVerified(result)
                 if transaction.productID == "com.htasks.aiprompts.30" {
-                    // Add 30 prompts to the user's balance
                     SecureStorageManager.shared.addPrompts(30)
                 }
                 purchasedProductIDs.insert(transaction.productID)
