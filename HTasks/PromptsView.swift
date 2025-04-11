@@ -25,7 +25,7 @@ struct PromptsView: View {
             }
         }
         .padding()
-        .onChange(of: storeKitManager.purchasedProductIDs) { _ in
+        .onChange(of: storeKitManager.purchasedProductIDs) { oldValue, newValue in
             remainingPrompts = SecureStorageManager.shared.getRemainingMessages()
         }
         .sheet(isPresented: $showingPurchaseSheet) {

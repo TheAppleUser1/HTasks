@@ -11,7 +11,10 @@ class StoreKitManager: ObservableObject {
     private let productIdentifiers = ["com.htasks.aiprompts.30"]
     
     private init() {
-        // Initialize StoreKit
+        setupStoreKit()
+    }
+    
+    private func setupStoreKit() {
         Task {
             await loadProducts()
             await updatePurchasedProducts()
@@ -23,16 +26,26 @@ class StoreKitManager: ObservableObject {
         }
     }
     
-    private func handle(transactionResult: VerificationResult<Transaction>) async {
+    private func handle(transactionResult: VerificationResult<StoreKit.Transaction>) async {
         do {
             let transaction = try checkVerified(transactionResult)
             if transaction.productID == "com.htasks.aiprompts.30" {
+                // Add 30 prompts for consumable purchase
                 SecureStorageManager.shared.addPrompts(30)
             }
-            purchasedProductIDs.insert(transaction.productID)
+            // For consumables, we don't need to track purchasedProductIDs
             await transaction.finish()
         } catch {
             print("Failed to handle transaction: \(error)")
+        }
+    }
+    
+    private func checkVerified<T>(_ result: VerificationResult<T>) throws -> T {
+        switch result {
+        case .unverified:
+            throw StoreError.failedVerification
+        case .verified(let safe):
+            return safe
         }
     }
     
@@ -50,7 +63,10 @@ class StoreKitManager: ObservableObject {
         switch result {
         case .success(let verification):
             let transaction = try checkVerified(verification)
-            await updatePurchasedProducts()
+            // Add prompts immediately for consumable
+            if transaction.productID == "com.htasks.aiprompts.30" {
+                SecureStorageManager.shared.addPrompts(30)
+            }
             await transaction.finish()
             return true
             
@@ -66,26 +82,8 @@ class StoreKitManager: ObservableObject {
     }
     
     func updatePurchasedProducts() async {
-        for await result in Transaction.currentEntitlements {
-            do {
-                let transaction = try checkVerified(result)
-                if transaction.productID == "com.htasks.aiprompts.30" {
-                    SecureStorageManager.shared.addPrompts(30)
-                }
-                purchasedProductIDs.insert(transaction.productID)
-            } catch {
-                print("Failed to update purchased products: \(error)")
-            }
-        }
-    }
-    
-    private func checkVerified<T>(_ result: VerificationResult<T>) throws -> T {
-        switch result {
-        case .unverified:
-            throw StoreError.failedVerification
-        case .verified(let safe):
-            return safe
-        }
+        // For consumables, we don't need to track past purchases
+        // as they are one-time use
     }
 }
 
