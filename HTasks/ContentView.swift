@@ -169,7 +169,7 @@ struct TaskStats: Codable {
     var lastCompletionDate: Date?
     var achievements: [Achievement] = Achievement.allAchievements
     
-    mutating func updateStats(for tasks: [Task]) {
+    mutating func updateStats(for tasks: [HTTask]) {
         // Reset daily and weekly stats
         let calendar = Calendar.current
         let now = Date()
@@ -239,7 +239,7 @@ struct TaskStats: Codable {
     }
 }
 
-struct Task: Identifiable, Codable {
+struct HTTask: Identifiable, Codable {
     var id: UUID
     var title: String
     var isCompleted: Bool
@@ -294,7 +294,7 @@ struct UserSettings: Codable {
 
 struct ContentView: View {
     @State private var isWelcomeActive = true
-    @State private var tasks: [Task] = []
+    @State private var tasks: [HTTask] = []
     @Environment(\.colorScheme) var colorScheme
     
     init() {
@@ -334,7 +334,7 @@ struct ContentView: View {
     private func loadTasks() {
         if let savedTasks = UserDefaults.standard.data(forKey: "savedTasks") {
             do {
-                let decodedTasks = try JSONDecoder().decode([Task].self, from: savedTasks)
+                let decodedTasks = try JSONDecoder().decode([HTTask].self, from: savedTasks)
                 self.tasks = decodedTasks
                 
                 // Log for debugging
@@ -363,7 +363,7 @@ class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
 }
 
 struct WelcomeView: View {
-    @Binding var tasks: [Task]
+    @Binding var tasks: [HTTask]
     @Binding var isWelcomeActive: Bool
     @State private var newTaskTitle: String = ""
     @State private var dueDate: Date = Date()
@@ -578,7 +578,7 @@ struct WelcomeView: View {
     }
     
     private func addTask(_ title: String, withDate: Bool = false) {
-        let newTask = Task(
+        let newTask = HTTask(
             title: title,
             dueDate: withDate ? dueDate : nil,
             completionDate: withDate ? Date() : nil,
@@ -596,7 +596,7 @@ struct WelcomeView: View {
         selectedCategory = .personal
     }
     
-    private func scheduleNotification(for task: Task) {
+    private func scheduleNotification(for task: HTTask) {
         guard let dueDate = task.dueDate else { return }
         
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
@@ -641,13 +641,14 @@ struct WelcomeView: View {
 }
 
 struct HomeView: View {
-    @Binding var tasks: [Task]
-    @State private var taskToDelete: Task?
+    @Binding var tasks: [HTTask]
+    @State private var taskToDelete: HTTask?
     @State private var showingDeleteAlert = false
     @State private var showingAddTaskSheet = false
     @State private var showingSettingsSheet = false
     @State private var showingAchievementsSheet = false
     @State private var showingStatisticsSheet = false
+    @State private var showingChatSheet = false
     @State private var newTaskTitle = ""
     @State private var newTaskDueDate: Date = Date()
     @State private var showDatePicker = false
@@ -816,6 +817,16 @@ struct HomeView: View {
         }
         .navigationTitle("My Tasks")
         .navigationBarItems(trailing: HStack(spacing: 16) {
+            Button(action: {
+                showingChatSheet = true
+            }) {
+                Image(systemName: "message.fill")
+                    .font(.title2)
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                    .padding(8)
+                    .contentShape(Rectangle())
+            }
+            
             Button(action: {
                 showingAchievementsSheet = true
             }) {
@@ -1088,6 +1099,9 @@ struct HomeView: View {
         .sheet(isPresented: $showingStatisticsSheet) {
             StatisticsView()
         }
+        .sheet(isPresented: $showingChatSheet) {
+            ChatView()
+        }
         .alert(isPresented: $showingDeleteAlert) {
             Alert(
                 title: Text("Are you sure you want to delete this task?"),
@@ -1105,7 +1119,7 @@ struct HomeView: View {
         }
     }
     
-    private func toggleTaskCompletion(_ task: Task) {
+    private func toggleTaskCompletion(_ task: HTTask) {
         if let index = tasks.firstIndex(where: { $0.id == task.id }) {
             tasks[index].isCompleted.toggle()
             tasks[index].completionDate = tasks[index].isCompleted ? Date() : nil
@@ -1166,7 +1180,7 @@ struct HomeView: View {
     }
     
     private func addTask(_ title: String, withDate: Bool = false) {
-        let newTask = Task(
+        let newTask = HTTask(
             title: title,
             dueDate: withDate ? newTaskDueDate : nil,
             completionDate: withDate ? Date() : nil,
@@ -1184,7 +1198,7 @@ struct HomeView: View {
         selectedCategory = .personal
     }
     
-    private func deleteTask(_ task: Task) {
+    private func deleteTask(_ task: HTTask) {
         tasks.removeAll { $0.id == task.id }
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [task.id.uuidString])
     }
@@ -1225,7 +1239,7 @@ struct HomeView: View {
         }
     }
     
-    private func scheduleNotification(for task: Task, at date: Date) {
+    private func scheduleNotification(for task: HTTask, at date: Date) {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
             if granted {
                 let content = UNMutableNotificationContent()

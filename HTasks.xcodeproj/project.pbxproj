@@ -6,10 +6,6 @@
 	objectVersion = 77;
 	objects = {
 
-/* Begin PBXBuildFile section */
-		18D8F0F72DA9457A0005DAD2 /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 18D8F0F62DA9457A0005DAD2 /* StoreKit.framework */; };
-/* End PBXBuildFile section */
-
 /* Begin PBXContainerItemProxy section */
 		182DBF3F2D98571C006F64D4 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -44,7 +40,6 @@
 		182DBF2E2D98571A006F64D4 /* HTasks.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HTasks.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		182DBF3E2D98571C006F64D4 /* HTasksTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HTasksTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		182DBF482D98571C006F64D4 /* HTasksUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HTasksUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		18D8F0F62DA9457A0005DAD2 /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -96,7 +91,6 @@
 				182DBF302D98571A006F64D4 /* HTasks */,
 				182DBF412D98571C006F64D4 /* HTasksTests */,
 				182DBF4B2D98571C006F64D4 /* HTasksUITests */,
-				18D8F0F52DA9457A0005DAD2 /* Frameworks */,
 				182DBF2F2D98571A006F64D4 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -109,14 +103,6 @@
 				182DBF482D98571C006F64D4 /* HTasksUITests.xctest */,
 			);
 			name = Products;
-			sourceTree = "<group>";
-		};
-		18D8F0F52DA9457A0005DAD2 /* Frameworks */ = {
-			isa = PBXGroup;
-			children = (
-				18D8F0F62DA9457A0005DAD2 /* StoreKit.framework */,
-			);
-			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -223,6 +209,8 @@
 			);
 			mainGroup = 182DBF252D98571A006F64D4;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 182DBF2F2D98571A006F64D4 /* Products */;
 			projectDirPath = "";
@@ -427,6 +415,7 @@
 				DEVELOPMENT_TEAM = P6PV2R9443;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = HTasks;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -459,6 +448,7 @@
 				DEVELOPMENT_TEAM = P6PV2R9443;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = HTasks;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
