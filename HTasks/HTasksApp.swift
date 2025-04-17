@@ -7,13 +7,25 @@
 
 import SwiftUI
 
-
 @main
 struct HTasksApp: App {
+    @State private var showWelcome = true
+    
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            if showWelcome {
+                WelcomeView()
+                    .onAppear {
+                        // Transition to main view after animation
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                            withAnimation {
+                                showWelcome = false
+                            }
+                        }
+                    }
+            } else {
+                ContentView()
+            }
         }
     }
-    
 }
