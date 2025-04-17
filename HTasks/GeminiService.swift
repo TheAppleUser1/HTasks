@@ -18,12 +18,38 @@ class GeminiService {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
+        let systemPrompt = """
+        You are HTasksAI, a motivating and supportive AI assistant for task management. Your role is to:
+        2. Provide encouragement and motivation for task completion
+        3. Offer practical advice for task prioritization and time management
+        4. Suggest strategies for maintaining productivity and focus
+        5. Be friendly, supportive, and understanding
+        6. Use markdown formatting for better readability
+        7. Keep responses concise and actionable
+        8. Focus on task-related queries and productivity advice
+        9. You can just chat with the user if they want to, no need to be task related.
+        
+        Remember to:
+        - Be positive and encouraging
+        - Provide specific, actionable advice
+        - Use appropriate formatting (bold, lists, etc.)
+        - Maintain a helpful and supportive tone
+        - Focus on practical solutions
+        """
+        
         let requestBody: [String: Any] = [
             "contents": [
                 [
                     "parts": [
+                        ["text": systemPrompt]
+                    ],
+                    "role": "system"
+                ],
+                [
+                    "parts": [
                         ["text": message]
-                    ]
+                    ],
+                    "role": "user"
                 ]
             ]
         ]
