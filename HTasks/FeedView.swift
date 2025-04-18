@@ -10,15 +10,6 @@ struct FeedView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
     
-    struct Post: Identifiable {
-        let id = UUID()
-        let content: String
-        let author: String
-        let timestamp: Date
-        let likes: Int
-        let comments: Int
-    }
-    
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
@@ -133,11 +124,11 @@ struct FeedView: View {
     }
     
     private func likePost(_ post: Post) {
-        firebaseService.likePost(postId: post.id) { result in
-            switch result {
-            case .success:
-                loadPosts()
-            case .failure(let error):
+        Task {
+            do {
+                try await firebaseService.likePost(postId: post.id)
+                await loadPosts()
+            } catch {
                 errorMessage = error.localizedDescription
             }
         }
@@ -152,50 +143,39 @@ struct PostCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Circle()
-                    .fill(Color.gray.opacity(0.3))
-                    .frame(width: 40, height: 40)
-                
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(post.author)
-                        .font(.headline)
-                        .foregroundColor(colorScheme == .dark ? .white : .black)
-                    Text(post.timestamp, style: .relative)
-                        .font(.caption)
-                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .black.opacity(0.6))
-                }
-                
+                Text(post.author)
+                    .font(.headline)
                 Spacer()
+                Text(post.timestamp, style: .relative)
+                    .font(.caption)
+                    .foregroundColor(.gray)
             }
             
             Text(post.content)
-                .foregroundColor(colorScheme == .dark ? .white : .black)
+                .font(.body)
             
-            HStack(spacing: 16) {
+            HStack {
                 Button(action: onLike) {
-                    HStack(spacing: 4) {
+                    HStack {
                         Image(systemName: "heart.fill")
                             .foregroundColor(.red)
                         Text("\(post.likes)")
-                            .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
                     }
                 }
                 
-                HStack(spacing: 4) {
-                    Image(systemName: "bubble.right.fill")
-                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
+                Spacer()
+                
+                HStack {
+                    Image(systemName: "bubble.right")
                     Text("\(post.comments)")
-                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
                 }
             }
-            .font(.subheadline)
+            .foregroundColor(.gray)
         }
         .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
-                .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
-        )
+        .background(colorScheme == .dark ? Color(.systemGray6) : .white)
+        .cornerRadius(12)
+        .shadow(radius: 2)
     }
 }
 

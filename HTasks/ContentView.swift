@@ -648,7 +648,7 @@ struct HomeView: View {
     @State private var showingSettingsSheet = false
     @State private var showingAchievementsSheet = false
     @State private var showingStatisticsSheet = false
-    @State private var showingChatSheet = false
+    @State private var showingFeedSheet = false
     @State private var newTaskTitle = ""
     @State private var newTaskDueDate: Date = Date()
     @State private var showDatePicker = false
@@ -797,6 +797,24 @@ struct HomeView: View {
                     Spacer()
                     
                     Button(action: {
+                        showingFeedSheet = true
+                    }) {
+                        Image(systemName: "newspaper.fill")
+                            .font(.title)
+                            .fontWeight(.bold)
+                            .foregroundColor(colorScheme == .dark ? .black : .white)
+                            .frame(width: 60, height: 60)
+                            .background(
+                                Circle()
+                                    .fill(colorScheme == .dark ? .white : .black)
+                                    .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
+                            )
+                    }
+                    .padding(.bottom, 20)
+                    
+                    Spacer()
+                    
+                    Button(action: {
                         showingAddTaskSheet = true
                     }) {
                         Image(systemName: "plus")
@@ -817,16 +835,6 @@ struct HomeView: View {
         }
         .navigationTitle("My Tasks")
         .navigationBarItems(trailing: HStack(spacing: 16) {
-            Button(action: {
-                showingChatSheet = true
-            }) {
-                Image(systemName: "message.fill")
-                    .font(.title2)
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
-                    .padding(8)
-                    .contentShape(Rectangle())
-            }
-            
             Button(action: {
                 showingAchievementsSheet = true
             }) {
@@ -1099,8 +1107,8 @@ struct HomeView: View {
         .sheet(isPresented: $showingStatisticsSheet) {
             StatisticsView()
         }
-        .sheet(isPresented: $showingChatSheet) {
-            ChatView()
+        .sheet(isPresented: $showingFeedSheet) {
+            FeedView()
         }
         .alert(isPresented: $showingDeleteAlert) {
             Alert(
