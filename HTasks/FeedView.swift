@@ -97,12 +97,14 @@ struct FeedView: View {
         isLoading = true
         errorMessage = nil
         
-        Task {
-            do {
-                posts = try await firebaseService.fetchPosts(completion: <#(Result<[Post], any Error>) -> Void#>)
-                isLoading = false
-            } catch {
-                errorMessage = error.localizedDescription
+        firebaseService.fetchPosts { result in
+            Task { @MainActor in
+                switch result {
+                case .success(let fetchedPosts):
+                    posts = fetchedPosts
+                case .failure(let error):
+                    errorMessage = error.localizedDescription
+                }
                 isLoading = false
             }
         }
@@ -112,12 +114,14 @@ struct FeedView: View {
         isLoading = true
         errorMessage = nil
         
-        Task {
-            do {
-                try await firebaseService.createPost(content: content)
-                await loadPosts()
-            } catch {
-                errorMessage = error.localizedDescription
+        firebaseService.createPost(content: content) { result in
+            Task { @MainActor in
+                switch result {
+                case .success:
+                    await loadPosts()
+                case .failure(let error):
+                    errorMessage = error.localizedDescription
+                }
                 isLoading = false
             }
         }
