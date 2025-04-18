@@ -97,13 +97,13 @@ struct FeedView: View {
         isLoading = true
         errorMessage = nil
         
-        firebaseService.fetchPosts { result in
-            isLoading = false
-            switch result {
-            case .success(let fetchedPosts):
-                posts = fetchedPosts
-            case .failure(let error):
+        Task {
+            do {
+                posts = try await firebaseService.fetchPosts(completion: <#(Result<[Post], any Error>) -> Void#>)
+                isLoading = false
+            } catch {
                 errorMessage = error.localizedDescription
+                isLoading = false
             }
         }
     }
@@ -112,24 +112,30 @@ struct FeedView: View {
         isLoading = true
         errorMessage = nil
         
-        firebaseService.createPost(content: content) { result in
-            isLoading = false
-            switch result {
-            case .success:
-                loadPosts()
-            case .failure(let error):
+        Task {
+            do {
+                try await firebaseService.createPost(content: content)
+                await loadPosts()
+            } catch {
                 errorMessage = error.localizedDescription
+                isLoading = false
             }
         }
     }
     
     private func likePost(_ post: Post) {
-        Task {
-            do {
-                try await firebaseService.likePost(postId: post.id)
-                await loadPosts()
-            } catch {
-                errorMessage = error.localizedDescription
+        isLoading = true
+        errorMessage = nil
+        
+        firebaseService.likePost(postId: post.id) { result in
+            Task { @MainActor in
+                switch result {
+                case .success:
+                    await loadPosts()
+                case .failure(let error):
+                    errorMessage = error.localizedDescription
+                }
+                isLoading = false
             }
         }
     }
