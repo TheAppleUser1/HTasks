@@ -32,25 +32,11 @@ struct ChatView: View {
                     
                     // Model Info
                     VStack(spacing: 2) {
-                        HStack(alignment: .center, spacing: 4) {
-                            Text("HTasksAI")
-                                .font(.headline)
-                                .foregroundColor(colorScheme == .dark ? .white : .black)
-                            
-                            Text("BETA")
-                                .font(.caption2)
-                                .fontWeight(.semibold)
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(
-                                    Capsule()
-                                        .fill(Color(white: 0.5))
-                                )
-                                .offset(y: 1)
-                        }
+                        Text("Gemini 2.0 Lite")
+                            .font(.headline)
+                            .foregroundColor(colorScheme == .dark ? .white : .black)
                         
-                        Text("Powered by Gemini 2.0 Flash Lite, Imported from GemAI")
+                        Text("Imported from GemAI")
                             .font(.caption)
                             .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .black.opacity(0.6))
                     }
