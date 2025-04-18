@@ -118,7 +118,7 @@ struct FeedView: View {
             Task { @MainActor in
                 switch result {
                 case .success:
-                    await loadPosts()
+                    loadPosts()
                 case .failure(let error):
                     errorMessage = error.localizedDescription
                 }
@@ -135,7 +135,7 @@ struct FeedView: View {
             Task { @MainActor in
                 switch result {
                 case .success:
-                    await loadPosts()
+                    loadPosts()
                 case .failure(let error):
                     errorMessage = error.localizedDescription
                 }

@@ -9,7 +9,7 @@
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>com.golobiczadaniel.htasks</string>
+	<string>com.golobiczadaniel.HTasks</string>
 	<key>PROJECT_ID</key>
 	<string>htasks-87478</string>
 	<key>STORAGE_BUCKET</key>
@@ -25,6 +25,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:225072418868:ios:007c0357eba75f3f287a61</string>
+	<string>1:225072418868:ios:52e93db8c291cead287a61</string>
 </dict>
 </plist>

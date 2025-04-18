@@ -38,30 +38,56 @@ class FirebaseService: ObservableObject {
     }
     
     func signUp(email: String, password: String, username: String, completion: @escaping (Result<User, Error>) -> Void) {
+        print("Attempting to sign up user with email: \(email)")
+        
+        // Validate input
+        guard !email.isEmpty, !password.isEmpty, !username.isEmpty else {
+            let error = NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "All fields are required"])
+            print("Sign up error: Empty fields")
+            completion(.failure(error))
+            return
+        }
+        
         Auth.auth().createUser(withEmail: email, password: password) { [weak self] result, error in
             if let error = error {
+                print("Firebase Auth error (raw): \(error)")
+                print("Firebase Auth error (localized): \(error.localizedDescription)")
                 completion(.failure(error))
                 return
             }
             
-            if let user = result?.user {
-                // Create user profile in Firestore
-                let userData: [String: Any] = [
-                    "username": username,
-                    "email": email,
-                    "createdAt": FieldValue.serverTimestamp()
-                ]
-                
-                self?.db.collection("users").document(user.uid).setData(userData) { error in
-                    if let error = error {
-                        completion(.failure(error))
-                        return
+            guard let user = result?.user else {
+                let error = NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to create user"])
+                print("Sign up error: No user returned")
+                completion(.failure(error))
+                return
+            }
+            
+            // Create user profile in Firestore
+            let userData: [String: Any] = [
+                "username": username,
+                "email": email,
+                "createdAt": FieldValue.serverTimestamp()
+            ]
+            
+            print("Creating user profile in Firestore for user: \(user.uid)")
+            self?.db.collection("users").document(user.uid).setData(userData) { error in
+                if let error = error {
+                    print("Firestore error: \(error.localizedDescription)")
+                    // Try to delete the auth user if Firestore creation fails
+                    user.delete { error in
+                        if let error = error {
+                            print("Failed to delete auth user after Firestore error: \(error.localizedDescription)")
+                        }
                     }
-                    
-                    self?.currentUser = user
-                    self?.isAuthenticated = true
-                    completion(.success(user))
+                    completion(.failure(error))
+                    return
                 }
+                
+                print("Successfully created user profile")
+                self?.currentUser = user
+                self?.isAuthenticated = true
+                completion(.success(user))
             }
         }
     }
@@ -70,6 +96,38 @@ class FirebaseService: ObservableObject {
         try Auth.auth().signOut()
         currentUser = nil
         isAuthenticated = false
+    }
+    
+    // MARK: - User Profile
+    
+    func updateUserFCMToken(token: String) {
+        guard let userId = currentUser?.uid else {
+            print("Cannot update FCM token: User not authenticated")
+            return
+        }
+        
+        let userRef = db.collection("users").document(userId)
+        
+        print("Updating FCM token for user \(userId): \(token)")
+        // Use FieldValue.arrayUnion to add the token without duplicates
+        // Store tokens in an array to support multiple devices per user
+        userRef.updateData(["fcmTokens": FieldValue.arrayUnion([token])]) { error in
+            if let error = error {
+                // If the field doesn't exist yet, set it initially
+                if (error as NSError).code == 5 /* NOT_FOUND */ {
+                    print("fcmTokens field not found, creating it.")
+                    userRef.setData(["fcmTokens": [token]], merge: true) { setError in
+                        if let setError = setError {
+                            print("Error setting initial FCM token: \(setError.localizedDescription)")
+                        }
+                    }
+                } else {
+                    print("Error updating FCM token: \(error.localizedDescription)")
+                }
+            } else {
+                print("Successfully updated FCM token.")
+            }
+        }
     }
     
     // MARK: - Posts
