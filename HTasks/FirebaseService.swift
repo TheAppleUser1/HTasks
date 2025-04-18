@@ -240,6 +240,89 @@ class FirebaseService: ObservableObject {
             completion(.success(()))
         }
     }
+    
+    // MARK: - Comments
+    
+    func createComment(postId: String, content: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        guard let userId = currentUser?.uid else {
+            completion(.failure(NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "User not authenticated"])))
+            return
+        }
+        
+        let batch = db.batch()
+        
+        // Create the comment document
+        let commentRef = db.collection("comments").document()
+        let commentData: [String: Any] = [
+            "postId": postId,
+            "content": content,
+            "authorId": userId,
+            "createdAt": FieldValue.serverTimestamp()
+        ]
+        batch.setData(commentData, forDocument: commentRef)
+        
+        // Update the post's comment count
+        let postRef = db.collection("posts").document(postId)
+        batch.updateData(["comments": FieldValue.increment(Int64(1))], forDocument: postRef)
+        
+        // Commit the batch
+        batch.commit { error in
+            if let error = error {
+                completion(.failure(error))
+                return
+            }
+            completion(.success(()))
+        }
+    }
+    
+    func fetchComments(for postId: String, completion: @escaping (Result<[Comment], Error>) -> Void) {
+        db.collection("comments")
+            .whereField("postId", isEqualTo: postId)
+            .order(by: "createdAt", descending: false)
+            .getDocuments { [weak self] snapshot, error in
+                if let error = error {
+                    completion(.failure(error))
+                    return
+                }
+                
+                guard let documents = snapshot?.documents else {
+                    completion(.success([]))
+                    return
+                }
+                
+                var comments: [Comment] = []
+                let group = DispatchGroup()
+                
+                for document in documents {
+                    group.enter()
+                    let data = document.data()
+                    
+                    if let authorId = data["authorId"] as? String {
+                        self?.db.collection("users").document(authorId).getDocument { userSnapshot, error in
+                            defer { group.leave() }
+                            
+                            if let userData = userSnapshot?.data(),
+                               let username = userData["username"] as? String {
+                                let comment = Comment(
+                                    id: document.documentID,
+                                    postId: data["postId"] as? String ?? "",
+                                    content: data["content"] as? String ?? "",
+                                    author: username,
+                                    timestamp: (data["createdAt"] as? Timestamp)?.dateValue() ?? Date()
+                                )
+                                comments.append(comment)
+                            }
+                        }
+                    } else {
+                        group.leave()
+                    }
+                }
+                
+                group.notify(queue: .main) {
+                    completion(.success(comments.sorted { $0.timestamp < $1.timestamp }))
+                }
+            }
+    }
 }
 
 // MARK: - Models
@@ -251,4 +334,12 @@ struct Post: Identifiable {
     let timestamp: Date
     let likes: Int
     let comments: Int
+}
+
+struct Comment: Identifiable {
+    let id: String
+    let postId: String
+    let content: String
+    let author: String
+    let timestamp: Date
 } 

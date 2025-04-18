@@ -149,6 +149,7 @@ struct PostCard: View {
     let post: Post
     let onLike: () -> Void
     @Environment(\.colorScheme) var colorScheme
+    @State private var showingComments = false
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -175,9 +176,11 @@ struct PostCard: View {
                 
                 Spacer()
                 
-                HStack {
-                    Image(systemName: "bubble.right")
-                    Text("\(post.comments)")
+                Button(action: { showingComments = true }) {
+                    HStack {
+                        Image(systemName: "bubble.right")
+                        Text("\(post.comments)")
+                    }
                 }
             }
             .foregroundColor(.gray)
@@ -186,6 +189,9 @@ struct PostCard: View {
         .background(colorScheme == .dark ? Color(.systemGray6) : .white)
         .cornerRadius(12)
         .shadow(radius: 2)
+        .sheet(isPresented: $showingComments) {
+            CommentView(post: post)
+        }
     }
 }
 
