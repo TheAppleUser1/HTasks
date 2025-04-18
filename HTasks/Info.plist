@@ -1,1 +1,0 @@
-// Remove the GIDClientID and CFBundleURLTypes entries since they'll be handled by GoogleService-Info.plist 
