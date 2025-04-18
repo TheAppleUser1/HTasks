@@ -3,8 +3,6 @@ import FirebaseCore
 import FirebaseAuth
 import FirebaseFirestore
 import FirebaseStorage
-import FirebaseGoogleAuthUI
-import GoogleSignIn
 
 class FirebaseService: ObservableObject {
     static let shared = FirebaseService()
