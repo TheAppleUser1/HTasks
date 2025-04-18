@@ -3,6 +3,8 @@ import FirebaseCore
 import FirebaseAuth
 import FirebaseFirestore
 import FirebaseStorage
+import FirebaseGoogleAuthUI
+import GoogleSignIn
 
 class FirebaseService: ObservableObject {
     static let shared = FirebaseService()
@@ -96,6 +98,63 @@ class FirebaseService: ObservableObject {
         try Auth.auth().signOut()
         currentUser = nil
         isAuthenticated = false
+    }
+    
+    func signInWithGoogle(presenting: UIViewController, completion: @escaping (Result<User, Error>) -> Void) {
+        guard let clientID = FirebaseApp.app()?.options.clientID else {
+            completion(.failure(NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Firebase configuration error"])))
+            return
+        }
+        
+        // Create Google Sign In configuration object
+        let config = GIDConfiguration(clientID: clientID)
+        GIDSignIn.sharedInstance.configuration = config
+        
+        // Start the sign in flow
+        GIDSignIn.sharedInstance.signIn(withPresenting: presenting) { [weak self] result, error in
+            if let error = error {
+                completion(.failure(error))
+                return
+            }
+            
+            guard let user = result?.user,
+                  let idToken = user.idToken?.tokenString else {
+                completion(.failure(NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to get ID token"])))
+                return
+            }
+            
+            let credential = GoogleAuthProvider.credential(withIDToken: idToken,
+                                                         accessToken: user.accessToken.tokenString)
+            
+            // Sign in with Firebase
+            Auth.auth().signIn(with: credential) { [weak self] result, error in
+                if let error = error {
+                    completion(.failure(error))
+                    return
+                }
+                
+                if let firebaseUser = result?.user {
+                    // Create or update user profile in Firestore
+                    let userData: [String: Any] = [
+                        "username": user.profile?.name ?? "User",
+                        "email": user.profile?.email ?? "",
+                        "createdAt": FieldValue.serverTimestamp(),
+                        "lastLoginAt": FieldValue.serverTimestamp()
+                    ]
+                    
+                    self?.db.collection("users").document(firebaseUser.uid).setData(userData, merge: true) { error in
+                        if let error = error {
+                            completion(.failure(error))
+                            return
+                        }
+                        
+                        self?.currentUser = firebaseUser
+                        self?.isAuthenticated = true
+                        completion(.success(firebaseUser))
+                    }
+                }
+            }
+        }
     }
     
     // MARK: - User Profile

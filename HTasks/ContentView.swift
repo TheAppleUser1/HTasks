@@ -270,6 +270,7 @@ struct UserSettings: Codable {
     var showDeleteConfirmation: Bool
     var deleteConfirmationText: String
     var stats: TaskStats
+    var showSocialFeatures: Bool
     
     static var defaultSettings: UserSettings {
         UserSettings(
@@ -287,7 +288,8 @@ struct UserSettings: Codable {
             ],
             showDeleteConfirmation: true,
             deleteConfirmationText: "Are you sure you want to delete this task?",
-            stats: TaskStats()
+            stats: TaskStats(),
+            showSocialFeatures: false
         )
     }
 }
@@ -796,23 +798,25 @@ struct HomeView: View {
                     
                     Spacer()
                     
-                    Button(action: {
-                        showingFeedSheet = true
-                    }) {
-                        Image(systemName: "newspaper.fill")
-                            .font(.title)
-                            .fontWeight(.bold)
-                            .foregroundColor(colorScheme == .dark ? .black : .white)
-                            .frame(width: 60, height: 60)
-                            .background(
-                                Circle()
-                                    .fill(colorScheme == .dark ? .white : .black)
-                                    .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
-                            )
+                    if settings.showSocialFeatures {
+                        Button(action: {
+                            showingFeedSheet = true
+                        }) {
+                            Image(systemName: "newspaper.fill")
+                                .font(.title)
+                                .fontWeight(.bold)
+                                .foregroundColor(colorScheme == .dark ? .black : .white)
+                                .frame(width: 60, height: 60)
+                                .background(
+                                    Circle()
+                                        .fill(colorScheme == .dark ? .white : .black)
+                                        .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
+                                )
+                        }
+                        .padding(.bottom, 20)
+                        
+                        Spacer()
                     }
-                    .padding(.bottom, 20)
-                    
-                    Spacer()
                     
                     Button(action: {
                         showingAddTaskSheet = true
@@ -977,6 +981,12 @@ struct HomeView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     Text("Customization")
                         .font(.headline)
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                    
+                    Toggle("Show Social Features (BETA)", isOn: $settings.showSocialFeatures)
+                        .onChange(of: settings.showSocialFeatures) { _, newValue in
+                            saveSettings()
+                        }
                         .foregroundColor(colorScheme == .dark ? .white : .black)
                     
                     Toggle("Show Confirmation when clicking delete", isOn: $settings.showDeleteConfirmation)
@@ -1470,6 +1480,136 @@ struct StatCard: View {
                 RoundedRectangle(cornerRadius: 12)
                 .fill(colorScheme == .dark ? Color.gray.opacity(0.1) : Color.white.opacity(0.5))
             )
+    }
+}
+
+struct AuthView: View {
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var firebaseService = FirebaseService.shared
+    @State private var email = ""
+    @State private var password = ""
+    @State private var username = ""
+    @State private var isSignUp = false
+    @State private var errorMessage: String?
+    @Environment(\.colorScheme) var colorScheme
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 20) {
+                if let error = errorMessage {
+                    Text(error)
+                        .foregroundColor(.red)
+                        .padding()
+                }
+                
+                TextField("Email", text: $email)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .autocapitalization(.none)
+                    .keyboardType(.emailAddress)
+                
+                SecureField("Password", text: $password)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                
+                if isSignUp {
+                    TextField("Username", text: $username)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                }
+                
+                Button(action: {
+                    if isSignUp {
+                        signUp()
+                    } else {
+                        signIn()
+                    }
+                }) {
+                    Text(isSignUp ? "Sign Up" : "Sign In")
+                        .fontWeight(.semibold)
+                        .padding()
+                        .frame(maxWidth: .infinity)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(colorScheme == .dark ? Color.blue.opacity(0.7) : Color.blue)
+                        )
+                        .foregroundColor(.white)
+                }
+                
+                Button(action: {
+                    isSignUp.toggle()
+                }) {
+                    Text(isSignUp ? "Already have an account? Sign In" : "Don't have an account? Sign Up")
+                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
+                }
+                
+                Divider()
+                    .padding(.vertical)
+                
+                Button(action: signInWithGoogle) {
+                    HStack {
+                        Image(systemName: "g.circle.fill")
+                            .font(.title2)
+                        Text("Sign in with Google")
+                    }
+                    .fontWeight(.semibold)
+                    .padding()
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.red)
+                    )
+                    .foregroundColor(.white)
+                }
+            }
+            .padding()
+            .navigationTitle(isSignUp ? "Sign Up" : "Sign In")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+    
+    private func signIn() {
+        firebaseService.signIn(email: email, password: password) { result in
+            switch result {
+            case .success:
+                dismiss()
+            case .failure(let error):
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+    
+    private func signUp() {
+        firebaseService.signUp(email: email, password: password, username: username) { result in
+            switch result {
+            case .success:
+                dismiss()
+            case .failure(let error):
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+    
+    private func signInWithGoogle() {
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let window = windowScene.windows.first,
+              let presenting = window.rootViewController else {
+            errorMessage = "Unable to present Google Sign-In"
+            return
+        }
+        
+        firebaseService.signInWithGoogle(presenting: presenting) { result in
+            switch result {
+            case .success:
+                dismiss()
+            case .failure(let error):
+                errorMessage = error.localizedDescription
+            }
+        }
     }
 }
 
