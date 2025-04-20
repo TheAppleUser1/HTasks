@@ -5,6 +5,8 @@ class GeminiService {
     
 
     private init() {}
+    private let baseURL = "https://afb6dffd.gemini-proxy-ewl.pages.dev/functions/gemini"
+
 
     func sendMessage(_ message: String) async throws -> String {
         guard let url = URL(string: baseURL) else {
