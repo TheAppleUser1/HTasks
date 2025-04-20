@@ -651,6 +651,7 @@ struct HomeView: View {
     @State private var showingAchievementsSheet = false
     @State private var showingStatisticsSheet = false
     @State private var showingFeedSheet = false
+    @State private var showingChatSheet = false
     @State private var newTaskTitle = ""
     @State private var newTaskDueDate: Date = Date()
     @State private var showDatePicker = false
@@ -794,6 +795,24 @@ struct HomeView: View {
                             )
                     }
                     .padding(.leading, 20)
+                    .padding(.bottom, 20)
+                    
+                    Spacer()
+                    
+                    Button(action: {
+                        showingChatSheet = true
+                    }) {
+                        Image(systemName: "bubble.left.fill")
+                            .font(.title)
+                            .fontWeight(.bold)
+                            .foregroundColor(colorScheme == .dark ? .black : .white)
+                            .frame(width: 60, height: 60)
+                            .background(
+                                Circle()
+                                    .fill(colorScheme == .dark ? .white : .black)
+                                    .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
+                            )
+                    }
                     .padding(.bottom, 20)
                     
                     Spacer()
@@ -1119,6 +1138,9 @@ struct HomeView: View {
         }
         .sheet(isPresented: $showingFeedSheet) {
             FeedView()
+        }
+        .sheet(isPresented: $showingChatSheet) {
+            ChatView()
         }
         .alert(isPresented: $showingDeleteAlert) {
             Alert(
