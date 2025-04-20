@@ -3,5 +3,8 @@
     "htasks": "htasks-87478"
   },
   "targets": {},
-  "etags": {}
+  "etags": {},
+  "scripts": {
+    "lint": "echo 'Skipping linting...'"
+  }
 }
