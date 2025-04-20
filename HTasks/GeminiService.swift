@@ -2,7 +2,7 @@ import Foundation
 
 class GeminiService {
     static let shared = GeminiService()
-    private let baseURL = "https://your-vercel-project.vercel.app/api/gemini" // 👈 change this
+    private let baseURL = "https://h-tasks.vercel.app/api/gemini"
 
     private init() {}
 
