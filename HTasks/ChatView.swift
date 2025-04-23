@@ -1,20 +1,16 @@
 import SwiftUI
+import StoreKit
 
 struct ChatView: View {
-    @State private var messages: [ChatMessage] = []
-    @State private var inputText: String = ""
-    @State private var isLoading: Bool = false
+    @StateObject private var promptManager = PromptManager.shared
+    @StateObject private var storeKit = StoreKitConfig.shared
+    @State private var messageText = ""
+    @State private var messages: [Message] = []
+    @State private var isLoading = false
     @State private var scrollToBottom: Bool = false
     @Environment(\.colorScheme) var colorScheme
     @FocusState private var isInputFocused: Bool
     @Environment(\.dismiss) private var dismiss
-    
-    struct ChatMessage: Identifiable {
-        var id = UUID()
-        let content: String
-        let isUser: Bool
-        let timestamp: Date
-    }
     
     var body: some View {
         ZStack {
@@ -90,12 +86,38 @@ struct ChatView: View {
                 Divider()
                     .background(colorScheme == .dark ? Color.gray.opacity(0.3) : Color.gray.opacity(0.2))
                 
-                InputArea(
-                    text: $inputText,
-                    isLoading: isLoading,
-                    onSend: sendMessage
-                )
-                .focused($isInputFocused)
+                if !promptManager.canSendPrompt {
+                    Button(action: {
+                        Task {
+                            await purchasePrompts()
+                        }
+                    }) {
+                        Text("Buy 30 more prompts for $1")
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.blue)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                    }
+                    .padding()
+                } else {
+                    HStack {
+                        TextField("Type a message...", text: $messageText)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                        
+                        Button(action: sendMessage) {
+                            Image(systemName: "paperplane.fill")
+                                .foregroundColor(.blue)
+                        }
+                        .disabled(messageText.isEmpty || isLoading)
+                    }
+                    .padding()
+                }
+                
+                Text("Remaining prompts: \(promptManager.remainingPrompts)")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                    .padding(.bottom)
             }
             .background(
                 LinearGradient(
@@ -119,52 +141,67 @@ struct ChatView: View {
     }
     
     private func sendMessage() {
-        guard !inputText.isEmpty && !isLoading else { return }
-        guard inputText.count <= 1000 else {
-            // Show error to user
+        guard !messageText.isEmpty else { return }
+        
+        if !promptManager.canSendPrompt {
+            // Add the limit message directly without using the AI model
+            let limitMessage = Message(
+                text: "Sorry, you reached your daily limit. Purchase 30 more prompts to continue using the AI model.",
+                isUser: false,
+                timestamp: Date()
+            )
+            messages.append(limitMessage)
             return
         }
         
-        let userMessage = ChatMessage(
-            content: inputText,
+        let userMessage = Message(
+            text: messageText,
             isUser: true,
             timestamp: Date()
         )
         messages.append(userMessage)
+        messageText = ""
         
         isLoading = true
-        inputText = ""
         
         Task {
             do {
-                let response = try await GeminiService.shared.sendMessage(userMessage.content)
-                let aiMessage = ChatMessage(
-                    content: response,
+                let response = try await GeminiService.shared.sendMessage(userMessage.text)
+                let aiMessage = Message(
+                    text: response,
                     isUser: false,
                     timestamp: Date()
                 )
-                
-                await MainActor.run {
-                    messages.append(aiMessage)
-                    isLoading = false
-                }
+                messages.append(aiMessage)
+                promptManager.usePrompt()
             } catch {
-                await MainActor.run {
-                    let errorMessage = ChatMessage(
-                        content: "Sorry, I couldn't process your request. Please try again.",
-                        isUser: false,
-                        timestamp: Date()
-                    )
-                    messages.append(errorMessage)
-                    isLoading = false
-                }
+                let errorMessage = Message(
+                    text: "Error: \(error.localizedDescription)",
+                    isUser: false,
+                    timestamp: Date()
+                )
+                messages.append(errorMessage)
             }
+            isLoading = false
+        }
+    }
+    
+    private func purchasePrompts() async {
+        guard let product = storeKit.products.first else { return }
+        
+        do {
+            let transaction = try await storeKit.purchase(product)
+            if transaction != nil {
+                promptManager.addPurchasedPrompts()
+            }
+        } catch {
+            print("Purchase failed: \(error)")
         }
     }
     
     private func loadMessages() {
         if let data = UserDefaults.standard.data(forKey: "chatMessages"),
-           let decodedMessages = try? JSONDecoder().decode([ChatMessage].self, from: data) {
+           let decodedMessages = try? JSONDecoder().decode([Message].self, from: data) {
             messages = decodedMessages
         }
     }
@@ -177,7 +214,7 @@ struct ChatView: View {
 }
 
 struct MessageBubble: View {
-    let message: ChatView.ChatMessage
+    let message: Message
     @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
@@ -187,7 +224,7 @@ struct MessageBubble: View {
             }
             
             VStack(alignment: message.isUser ? .trailing : .leading, spacing: 4) {
-                Text(message.content)
+                Text(message.text)
                     .padding()
                     .background(
                         RoundedRectangle(cornerRadius: 12)
@@ -255,4 +292,29 @@ struct InputArea: View {
     }
 }
 
-extension ChatView.ChatMessage: Codable {} 
+struct Message: Identifiable {
+    let id = UUID()
+    let text: String
+    let isUser: Bool
+    let timestamp: Date
+}
+
+struct MessageView: View {
+    let message: Message
+    
+    var body: some View {
+        HStack {
+            if message.isUser { Spacer() }
+            
+            Text(message.text)
+                .padding()
+                .background(message.isUser ? Color.blue : Color.gray.opacity(0.2))
+                .foregroundColor(message.isUser ? .white : .primary)
+                .cornerRadius(10)
+            
+            if !message.isUser { Spacer() }
+        }
+    }
+}
+
+extension Message: Codable {} 
