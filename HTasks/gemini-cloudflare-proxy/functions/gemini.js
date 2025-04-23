@@ -1,9 +1,14 @@
 export async function onRequestPost(context) {
-    const { request, env } = context;
+  const { request, env } = context;
+
+  try {
     const body = await request.json();
-  
-    const res = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=" + env.GEMINI_API_KEY,
+
+    // Debug: log the incoming body
+    console.log("Incoming prompt:", body.prompt);
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${env.GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: {
@@ -14,7 +19,7 @@ export async function onRequestPost(context) {
             {
               parts: [
                 {
-                  text: body.prompt || "Hello from Cloudflare 💅",
+                  text: body.prompt || "Default fallback prompt",
                 },
               ],
             },
@@ -22,10 +27,82 @@ export async function onRequestPost(context) {
         }),
       }
     );
-  
-    const data = await res.json();
+
+    const data = await response.json();
+
     return new Response(JSON.stringify(data), {
-      headers: { "Content-Type": "application/json" },
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
     });
+  } catch (err) {
+    return new Response(
+      JSON.stringify({
+        error: true,
+        message: err.message,
+        stack: err.stack,
+      }),
+      {
+        status: 500,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
   }
-  
+}
+export async function onRequestPost(context) {
+  const { request, env } = context;
+
+  try {
+    const body = await request.json();
+
+    // Debug: log the incoming body
+    console.log("Incoming prompt:", body.prompt);
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${env.GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                {
+                  text: body.prompt || "Default fallback prompt",
+                },
+              ],
+            },
+          ],
+        }),
+      }
+    );
+
+    const data = await response.json();
+
+    return new Response(JSON.stringify(data), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+  } catch (err) {
+    return new Response(
+      JSON.stringify({
+        error: true,
+        message: err.message,
+        stack: err.stack,
+      }),
+      {
+        status: 500,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
+  }
+}
