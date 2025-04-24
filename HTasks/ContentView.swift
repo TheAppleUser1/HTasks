@@ -7,6 +7,7 @@
 
 import SwiftUI
 import UserNotifications
+import SwiftGlass
 
 enum TaskPriority: String, CaseIterable, Codable {
     case easy = "Low"
@@ -388,21 +389,19 @@ struct WelcomeView: View {
                 Text("Welcome to HTasks!")
                     .font(.system(size: 40, weight: .bold, design: .rounded))
                     .foregroundColor(colorScheme == .dark ? .white : .black)
+                    .glass(radius: 16, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
                 
                 Text("Get Motivated")
                     .font(.headline)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
                     .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
+                    .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
                 
                 TextField("Type your own task", text: $newTaskTitle)
                     .padding()
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
-                    )
+                    .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
                     .padding(.horizontal)
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
                 
                 HStack {
                     Text("Priority")
@@ -421,6 +420,7 @@ struct WelcomeView: View {
                     .pickerStyle(SegmentedPickerStyle())
                 }
                 .padding(.horizontal)
+                .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
                 
                 HStack {
                     Text("Category")
@@ -437,19 +437,18 @@ struct WelcomeView: View {
                     .pickerStyle(MenuPickerStyle())
                 }
                 .padding(.horizontal)
+                .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
                 
                 Toggle("Add due date", isOn: $showDatePicker)
                     .padding(.horizontal)
                     .foregroundColor(colorScheme == .dark ? .white : .black)
+                    .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
                 
                 if showDatePicker {
                     DatePicker("Due Date & Time", selection: $dueDate, in: Date()...)
                         .datePickerStyle(.compact)
                         .padding()
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
-                        )
+                        .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
                         .padding(.horizontal)
                 }
                 
@@ -467,12 +466,8 @@ struct WelcomeView: View {
                     .fontWeight(.semibold)
                     .padding()
                     .frame(maxWidth: .infinity)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(colorScheme == .dark ? Color.blue.opacity(0.7) : Color.blue)
-                    )
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
                 }
+                .glass(radius: 12, color: .blue, material: .regularMaterial, gradientOpacity: 0.7)
                 .padding(.horizontal)
                 
                 VStack(alignment: .leading, spacing: 10) {
@@ -498,13 +493,8 @@ struct WelcomeView: View {
                                             .foregroundColor(colorScheme == .dark ? .white : .black)
                                     }
                                     .padding()
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
-                                            .shadow(color: colorScheme == .dark ? Color.black.opacity(0.1) : Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
-                                    )
-                                    .padding(EdgeInsets(top: 2, leading: 4, bottom: 2, trailing: 4))
                                 }
+                                .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
                             }
                         }
                         .padding(.horizontal)
@@ -525,12 +515,8 @@ struct WelcomeView: View {
                         .fontWeight(.semibold)
                         .padding()
                         .frame(maxWidth: .infinity)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(colorScheme == .dark ? Color.green.opacity(0.7) : Color.green)
-                        )
-                        .foregroundColor(colorScheme == .dark ? .white : .black)
                     }
+                    .glass(radius: 12, color: .green, material: .regularMaterial, gradientOpacity: 0.7)
                     .padding(.horizontal)
                 }
                 
@@ -666,6 +652,17 @@ struct HomeView: View {
     
     var body: some View {
         ZStack {
+            // Background gradient
+            LinearGradient(
+                gradient: Gradient(colors: colorScheme == .dark ? 
+                                  [Color.black, Color.blue.opacity(0.2)] : 
+                                  [Color.white, Color.blue.opacity(0.1)]),
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+
+            // Content
             VStack(spacing: 0) {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Number of tasks done this week:")
@@ -687,173 +684,88 @@ struct HomeView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding()
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.gray.opacity(0.1))
-                )
+                .glass(radius: 16, color: colorScheme == .dark ? .white : .black, material: .regularMaterial, gradientOpacity: 0.3)
                 .padding(.horizontal)
                 .padding(.top)
                 
                 List {
                     ForEach(tasks) { task in
-                        HStack(spacing: 12) {
-                            HStack(spacing: 6) {
-                                Circle()
-                                    .fill(task.priority.color)
-                                    .frame(width: 8, height: 8)
-                                
-                                Image(systemName: task.category.icon)
-                                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
-                                    .font(.subheadline)
+                        TaskRow(task: task, onToggle: {
+                            toggleTaskCompletion(task)
+                        }, onDelete: {
+                            taskToDelete = task
+                            if settings.showDeleteConfirmation {
+                                showingDeleteAlert = true
+                            } else {
+                                deleteTask(task)
                             }
-                            
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(task.title)
-                                    .font(.headline)
-                                    .foregroundColor(
-                                        task.isCompleted ?
-                                        (colorScheme == .dark ? .white.opacity(0.5) : .black.opacity(0.5)) :
-                                        (colorScheme == .dark ? .white : .black)
-                                    )
-                                    .strikethrough(task.isCompleted)
-                                
-                                if let dueDate = task.dueDate {
-                                    Text(dueDate, style: .time)
-                                        .font(.caption)
-                                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
-                                }
-                            }
-                            
-                            Spacer()
-                            
-                            HStack(spacing: 8) {
-                                Button(action: {
-                                    toggleTaskCompletion(task)
-                                }) {
-                                    Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
-                                        .font(.title2)
-                                        .foregroundColor(colorScheme == .dark ? .white : .black)
-                                        .contentShape(Rectangle())
-                                }
-                                .buttonStyle(BorderlessButtonStyle())
-                                
-                                Button(action: {
-                                    taskToDelete = task
-                                    if settings.showDeleteConfirmation {
-                                        showingDeleteAlert = true
-                                    } else {
-                                        deleteTask(task)
-                                    }
-                                }) {
-                                    Image(systemName: "trash.fill")
-                                        .font(.title2)
-                                        .foregroundColor(colorScheme == .dark ? .white : .black)
-                                        .contentShape(Rectangle())
-                                }
-                                .buttonStyle(BorderlessButtonStyle())
-                            }
-                        }
-                        .padding(.vertical, 8)
-                        .listRowBackground(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
-                                .padding(EdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8))
-                        )
-                        .listRowSeparator(.hidden)
-                        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                        })
                     }
                 }
                 .listStyle(PlainListStyle())
-                .background(Color.clear)
-            }
-            .background(
-                LinearGradient(
-                    gradient: Gradient(colors: colorScheme == .dark ? 
-                                      [Color.black, Color.blue.opacity(0.2)] : 
-                                      [Color.white, Color.blue.opacity(0.1)]),
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .edgesIgnoringSafeArea(.all)
-            )
-            
-            VStack {
-                Spacer()
-                HStack {
+                .scrollContentBackground(.hidden)
+
+                // Bottom Tab Bar
+                HStack(spacing: 0) {
+                    Spacer()
                     Button(action: {
                         showingStatisticsSheet = true
                     }) {
-                        Image(systemName: "chart.bar.fill")
-                            .font(.title)
-                            .fontWeight(.bold)
-                            .foregroundColor(colorScheme == .dark ? .black : .white)
-                            .frame(width: 60, height: 60)
-                            .background(
-                                Circle()
-                                    .fill(colorScheme == .dark ? .white : .black)
-                                    .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
-                            )
+                        VStack {
+                            Image(systemName: "chart.bar.fill")
+                                .font(.title2)
+                                .foregroundColor(colorScheme == .dark ? .black : .black)
+                        }
+                        .frame(width: 60, height: 60)
                     }
-                    .padding(.leading, 20)
-                    .padding(.bottom, 20)
-                    
+                    .glass(radius: 30, color: colorScheme == .dark ? .white : .white, material: .regularMaterial, gradientOpacity: 0.3)
+
                     Spacer()
                     
                     Button(action: {
                         showingChatSheet = true
                     }) {
-                        Image(systemName: "bubble.left.fill")
-                            .font(.title)
-                            .fontWeight(.bold)
-                            .foregroundColor(colorScheme == .dark ? .black : .white)
-                            .frame(width: 60, height: 60)
-                            .background(
-                                Circle()
-                                    .fill(colorScheme == .dark ? .white : .black)
-                                    .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
-                            )
+                        VStack {
+                            Image(systemName: "bubble.left.fill")
+                                .font(.title2)
+                                .foregroundColor(colorScheme == .dark ? .black : .black)
+                        }
+                        .frame(width: 60, height: 60)
                     }
-                    .padding(.bottom, 20)
-                    
+                    .glass(radius: 30, color: colorScheme == .dark ? .white : .white, material: .regularMaterial, gradientOpacity: 0.3)
+
                     Spacer()
                     
                     if settings.showSocialFeatures {
                         Button(action: {
                             showingFeedSheet = true
                         }) {
-                            Image(systemName: "newspaper.fill")
-                                .font(.title)
-                                .fontWeight(.bold)
-                                .foregroundColor(colorScheme == .dark ? .black : .white)
-                                .frame(width: 60, height: 60)
-                                .background(
-                                    Circle()
-                                        .fill(colorScheme == .dark ? .white : .black)
-                                        .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
-                                )
+                            VStack {
+                                Image(systemName: "newspaper.fill")
+                                    .font(.title2)
+                                    .foregroundColor(colorScheme == .dark ? .black : .black)
+                            }
+                            .frame(width: 60, height: 60)
                         }
-                        .padding(.bottom, 20)
-                        
+                        .glass(radius: 30, color: colorScheme == .dark ? .white : .white, material: .regularMaterial, gradientOpacity: 0.3)
+
                         Spacer()
                     }
                     
                     Button(action: {
                         showingAddTaskSheet = true
                     }) {
-                        Image(systemName: "plus")
-                            .font(.title)
-                            .fontWeight(.bold)
-                            .foregroundColor(colorScheme == .dark ? .black : .white)
-                            .frame(width: 60, height: 60)
-                            .background(
-                                Circle()
-                                    .fill(colorScheme == .dark ? .white : .black)
-                                    .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
-                            )
+                        VStack {
+                            Image(systemName: "plus")
+                                .font(.title2)
+                                .foregroundColor(colorScheme == .dark ? .black : .black)
+                        }
+                        .frame(width: 60, height: 60)
                     }
-                    .padding(.trailing, 20)
-                    .padding(.bottom, 20)
+                    .glass(radius: 30, color: colorScheme == .dark ? .white : .white, material: .regularMaterial, gradientOpacity: 0.3)
+                    Spacer()
                 }
+                .padding(.vertical, 20)
             }
         }
         .navigationTitle("My Tasks")
@@ -861,22 +773,28 @@ struct HomeView: View {
             Button(action: {
                 showingAchievementsSheet = true
             }) {
-                Image(systemName: "trophy.fill")
-                    .font(.title2)
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
-                    .padding(8)
-                    .contentShape(Rectangle())
+                VStack {
+                    Image(systemName: "trophy.fill")
+                        .font(.title2)
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                }
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
             }
+            .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial, gradientOpacity: 0.3)
             
             Button(action: {
                 showingSettingsSheet = true
             }) {
-                Image(systemName: "gear")
-                    .font(.title2)
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
-                    .padding(8)
-                    .contentShape(Rectangle())
+                VStack {
+                    Image(systemName: "gear")
+                        .font(.title2)
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                }
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
             }
+            .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial, gradientOpacity: 0.3)
         })
         .sheet(isPresented: $showingAddTaskSheet) {
             VStack(spacing: 16) {
@@ -1258,13 +1176,7 @@ struct HomeView: View {
         if let savedSettings = UserDefaults.standard.data(forKey: "userSettings") {
             if let decodedSettings = try? JSONDecoder().decode(UserSettings.self, from: savedSettings) {
                 self.settings = decodedSettings
-            } else {
-                self.settings = UserSettings.defaultSettings
-                saveSettings()
             }
-        } else {
-            self.settings = UserSettings.defaultSettings
-            saveSettings()
         }
     }
     
@@ -1310,6 +1222,72 @@ struct HomeView: View {
     }
 }
 
+struct TaskRow: View {
+    let task: HTTask
+    let onToggle: () -> Void
+    let onDelete: () -> Void
+    @Environment(\.colorScheme) var colorScheme
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(task.priority.color)
+                    .frame(width: 8, height: 8)
+                
+                Image(systemName: task.category.icon)
+                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
+                    .font(.subheadline)
+            }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(task.title)
+                    .font(.headline)
+                    .foregroundColor(
+                        task.isCompleted ?
+                        (colorScheme == .dark ? .white.opacity(0.5) : .black.opacity(0.5)) :
+                        (colorScheme == .dark ? .white : .black)
+                    )
+                    .strikethrough(task.isCompleted)
+                
+                if let dueDate = task.dueDate {
+                    Text(dueDate, style: .time)
+                        .font(.caption)
+                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
+                }
+            }
+            
+            Spacer()
+            
+            HStack(spacing: 16) {
+                Button(action: onToggle) {
+                    Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                        .font(.title2)
+                        .foregroundColor(task.isCompleted ? task.priority.color : (colorScheme == .dark ? .white : .black))
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(PlainButtonStyle())
+                .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial, gradientOpacity: 0.2)
+                
+                Button(action: onDelete) {
+                    Image(systemName: "trash.fill")
+                        .font(.title2)
+                        .foregroundColor(.red)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(PlainButtonStyle())
+                .glass(radius: 12, color: .red, material: .regularMaterial, gradientOpacity: 0.2)
+            }
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial, gradientOpacity: 0.2)
+        .padding(.horizontal, 8)
+    }
+}
+
 struct StatisticsView: View {
     @State private var settings = UserSettings.defaultSettings
     @Environment(\.colorScheme) var colorScheme
@@ -1329,6 +1307,7 @@ struct StatisticsView: View {
                 .fontWeight(.bold)
                 .foregroundColor(colorScheme == .dark ? .white : .black)
                 .padding(.top, 20)
+                .glass(radius: 16, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
             
             Picker("Time Range", selection: $selectedTimeRange) {
                 ForEach(TimeRange.allCases, id: \.self) { range in
@@ -1337,6 +1316,7 @@ struct StatisticsView: View {
             }
             .pickerStyle(SegmentedPickerStyle())
             .padding(.horizontal)
+            .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
             
             ScrollView {
                 VStack(spacing: 20) {
@@ -1363,10 +1343,7 @@ struct StatisticsView: View {
                         }
                     }
                     .padding()
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
-                    )
+                    .glass(radius: 16, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
                     
                     // Task Completion Stats
                     VStack(alignment: .leading, spacing: 12) {
@@ -1391,10 +1368,7 @@ struct StatisticsView: View {
                         }
                     }
                     .padding()
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
-                    )
+                    .glass(radius: 16, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
                     
                     // Category Distribution
                     VStack(alignment: .leading, spacing: 12) {
@@ -1416,10 +1390,7 @@ struct StatisticsView: View {
                         }
                     }
                     .padding()
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
-                    )
+                    .glass(radius: 16, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
                     
                     // Priority Distribution
                     VStack(alignment: .leading, spacing: 12) {
@@ -1442,10 +1413,7 @@ struct StatisticsView: View {
                         }
                     }
                     .padding()
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
-                    )
+                    .glass(radius: 16, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
                 }
                 .padding()
             }
@@ -1498,10 +1466,7 @@ struct StatCard: View {
             }
         .frame(maxWidth: .infinity, alignment: .leading)
             .padding()
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                .fill(colorScheme == .dark ? Color.gray.opacity(0.1) : Color.white.opacity(0.5))
-            )
+        .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
     }
 }
 

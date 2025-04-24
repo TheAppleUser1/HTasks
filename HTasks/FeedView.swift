@@ -1,5 +1,6 @@
 import SwiftUI
 import FirebaseAuth
+import SwiftGlass
 
 struct FeedView: View {
     @Environment(\.colorScheme) var colorScheme
@@ -19,6 +20,7 @@ struct FeedView: View {
                         .font(.title)
                         .fontWeight(.bold)
                         .foregroundColor(colorScheme == .dark ? .white : .black)
+                        .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
                     
                     Spacer()
                     
@@ -30,6 +32,7 @@ struct FeedView: View {
                                 .font(.title3)
                                 .foregroundColor(colorScheme == .dark ? .white : .black)
                         }
+                        .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
                     } else {
                         Button(action: {
                             showingAuthSheet = true
@@ -38,24 +41,22 @@ struct FeedView: View {
                                 .font(.headline)
                                 .foregroundColor(colorScheme == .dark ? .white : .black)
                         }
+                        .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
                     }
                 }
                 .padding()
-                .background(
-                    Rectangle()
-                        .fill(colorScheme == .dark ? Color.black : Color.white)
-                        .shadow(color: Color.black.opacity(0.1), radius: 2, y: 1)
-                )
                 
                 if let error = errorMessage {
                     Text(error)
                         .foregroundColor(.red)
                         .padding()
+                        .glass(radius: 12, color: .red, material: .regularMaterial, gradientOpacity: 0.3)
                 }
                 
                 if isLoading {
                     ProgressView()
                         .padding()
+                        .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 16) {
@@ -173,6 +174,7 @@ struct PostCard: View {
                         Text("\(post.likes)")
                     }
                 }
+                .glass(radius: 12, color: .red, material: .regularMaterial, gradientOpacity: 0.3)
                 
                 Spacer()
                 
@@ -182,13 +184,12 @@ struct PostCard: View {
                         Text("\(post.comments)")
                     }
                 }
+                .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
             }
             .foregroundColor(.gray)
         }
         .padding()
-        .background(colorScheme == .dark ? Color(.systemGray6) : .white)
-        .cornerRadius(12)
-        .shadow(radius: 2)
+        .glass(radius: 16, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
         .sheet(isPresented: $showingComments) {
             CommentView(post: post)
         }
@@ -207,10 +208,7 @@ struct NewPostView: View {
                 TextEditor(text: $postContent)
                     .frame(maxHeight: .infinity)
                     .padding()
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
-                    )
+                    .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
                     .padding()
                 
                 Button(action: {
@@ -223,12 +221,8 @@ struct NewPostView: View {
                         .fontWeight(.semibold)
                         .padding()
                         .frame(maxWidth: .infinity)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(colorScheme == .dark ? Color.blue.opacity(0.7) : Color.blue)
-                        )
-                        .foregroundColor(.white)
                 }
+                .glass(radius: 12, color: .blue, material: .regularMaterial, gradientOpacity: 0.7)
                 .padding(.horizontal)
                 .padding(.bottom)
             }
@@ -239,6 +233,7 @@ struct NewPostView: View {
                     Button("Cancel") {
                         dismiss()
                     }
+                    .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
                 }
             }
         }

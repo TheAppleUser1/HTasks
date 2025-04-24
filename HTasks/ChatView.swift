@@ -1,5 +1,6 @@
 import SwiftUI
 import StoreKit
+import SwiftGlass
 
 struct ChatView: View {
     @StateObject private var promptManager = PromptManager.shared
@@ -23,6 +24,7 @@ struct ChatView: View {
                             .font(.title3)
                             .foregroundColor(colorScheme == .dark ? .white : .black)
                     }
+                    .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
                     
                     Spacer()
                     
@@ -36,6 +38,7 @@ struct ChatView: View {
                             .font(.caption)
                             .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .black.opacity(0.6))
                     }
+                    .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
                     
                     Spacer()
                     
@@ -47,20 +50,11 @@ struct ChatView: View {
                         Image(systemName: "square.and.pencil")
                             .font(.title3)
                             .foregroundColor(colorScheme == .dark ? .white : .black)
-                            .frame(width: 44, height: 44)
-                            .background(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.gray.opacity(0.1))
-                            )
                     }
+                    .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
                 }
                 .padding(.horizontal)
                 .padding(.vertical, 8)
-                .background(
-                    Rectangle()
-                        .fill(colorScheme == .dark ? Color.black : Color.white)
-                        .shadow(color: Color.black.opacity(0.1), radius: 2, y: 1)
-                )
                 
                 ScrollViewReader { proxy in
                     ScrollView {
@@ -95,21 +89,21 @@ struct ChatView: View {
                         Text("Buy 30 more prompts for $1")
                             .frame(maxWidth: .infinity)
                             .padding()
-                            .background(Color.blue)
-                            .foregroundColor(.white)
-                            .cornerRadius(10)
                     }
+                    .glass(radius: 12, color: .blue, material: .regularMaterial, gradientOpacity: 0.7)
                     .padding()
                 } else {
                     HStack {
                         TextField("Type a message...", text: $messageText)
                             .textFieldStyle(RoundedBorderTextFieldStyle())
+                            .glass(radius: 20, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
                         
                         Button(action: sendMessage) {
                             Image(systemName: "paperplane.fill")
                                 .foregroundColor(.blue)
                         }
                         .disabled(messageText.isEmpty || isLoading)
+                        .glass(radius: 12, color: .blue, material: .regularMaterial, gradientOpacity: 0.7)
                     }
                     .padding()
                 }
@@ -226,13 +220,11 @@ struct MessageBubble: View {
             VStack(alignment: message.isUser ? .trailing : .leading, spacing: 4) {
                 Text(message.text)
                     .padding()
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(message.isUser ? 
-                                (colorScheme == .dark ? Color.blue.opacity(0.7) : Color.blue) :
-                                (colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
-                            )
-                            .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
+                    .glass(
+                        radius: 12,
+                        color: message.isUser ? .blue : (colorScheme == .dark ? .white : .black),
+                        material: .regularMaterial,
+                        gradientOpacity: message.isUser ? 0.7 : 0.5
                     )
                     .foregroundColor(message.isUser ? .white : (colorScheme == .dark ? .white : .black))
                 
@@ -271,10 +263,7 @@ struct InputArea: View {
         HStack(spacing: 12) {
             TextField("Type your message...", text: $text)
                 .padding()
-                .background(
-                    RoundedRectangle(cornerRadius: 20)
-                        .fill(colorScheme == .dark ? Color.gray.opacity(0.2) : Color.white.opacity(0.8))
-                )
+                .glass(radius: 20, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
                 .foregroundColor(colorScheme == .dark ? .white : .black)
                 .accessibilityLabel("Message input")
                 .accessibilityHint("Type your message here")
@@ -285,6 +274,7 @@ struct InputArea: View {
                     .foregroundColor(text.isEmpty ? .gray : (colorScheme == .dark ? .white : .black))
             }
             .disabled(text.isEmpty || isLoading)
+            .glass(radius: 12, color: text.isEmpty ? .gray : .blue, material: .regularMaterial, gradientOpacity: 0.7)
             .accessibilityLabel("Send message")
             .accessibilityHint("Tap to send your message")
         }
@@ -308,9 +298,13 @@ struct MessageView: View {
             
             Text(message.text)
                 .padding()
-                .background(message.isUser ? Color.blue : Color.gray.opacity(0.2))
+                .glass(
+                    radius: 12,
+                    color: message.isUser ? .blue : .gray,
+                    material: .regularMaterial,
+                    gradientOpacity: message.isUser ? 0.7 : 0.5
+                )
                 .foregroundColor(message.isUser ? .white : .primary)
-                .cornerRadius(10)
             
             if !message.isUser { Spacer() }
         }

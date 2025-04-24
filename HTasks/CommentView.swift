@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftGlass
 
 struct CommentView: View {
     let post: Post
@@ -18,26 +19,29 @@ struct CommentView: View {
                     Image(systemName: "xmark")
                         .foregroundColor(colorScheme == .dark ? .white : .black)
                 }
+                .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
                 
                 Spacer()
                 
                 Text("Comments")
                     .font(.headline)
+                    .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
                 
                 Spacer()
             }
             .padding()
-            .background(colorScheme == .dark ? Color.black : Color.white)
             
             if let error = errorMessage {
                 Text(error)
                     .foregroundColor(.red)
                     .padding()
+                    .glass(radius: 12, color: .red, material: .regularMaterial, gradientOpacity: 0.3)
             }
             
             if isLoading {
                 ProgressView()
                     .padding()
+                    .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
             } else {
                 // Comments List
                 ScrollView {
@@ -57,6 +61,7 @@ struct CommentView: View {
                     HStack {
                         TextField("Add a comment...", text: $newCommentText)
                             .textFieldStyle(RoundedBorderTextFieldStyle())
+                            .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
                         
                         Button(action: submitComment) {
                             Image(systemName: "arrow.up.circle.fill")
@@ -64,12 +69,22 @@ struct CommentView: View {
                                 .font(.title2)
                         }
                         .disabled(newCommentText.isEmpty)
+                        .glass(radius: 12, color: newCommentText.isEmpty ? .gray : .blue, material: .regularMaterial, gradientOpacity: 0.7)
                     }
                     .padding()
                 }
-                .background(colorScheme == .dark ? Color.black : Color.white)
             }
         }
+        .background(
+            LinearGradient(
+                gradient: Gradient(colors: colorScheme == .dark ? 
+                                  [Color.black, Color.blue.opacity(0.2)] : 
+                                  [Color.white, Color.blue.opacity(0.1)]),
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .edgesIgnoringSafeArea(.all)
+        )
         .onAppear(perform: loadComments)
     }
     
@@ -124,9 +139,7 @@ struct CommentRow: View {
                 .font(.body)
         }
         .padding()
-        .background(colorScheme == .dark ? Color(.systemGray6) : .white)
-        .cornerRadius(12)
-        .shadow(radius: 2)
+        .glass(radius: 16, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
     }
 }
 
