@@ -293,7 +293,7 @@ struct InputArea: View {
 }
 
 struct Message: Identifiable {
-    let id = UUID()
+    var id = UUID()
     let text: String
     let isUser: Bool
     let timestamp: Date

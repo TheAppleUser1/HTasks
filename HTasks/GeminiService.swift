@@ -3,34 +3,35 @@ import Foundation
 class GeminiService {
     static let shared = GeminiService()
     
-    private let apiKey = "YOUR_API_KEY_HERE"
-    private let baseURL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=\(apiKey)"
+    private let apiKey = "AIzaSyDHXGA4eOKAw6PYS83RCdwveTWLg7_BHEQ"
+    
+    private var baseURL: String {
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=\(apiKey)"
+    }
     
     private let systemInstructions = """
-    You are an AI assistant in the HTasks app. Follow these guidelines:
+    You are an AI assistant in the HTasks app, named HTasksAI. Follow these guidelines:
 
-    1. Prompt Limits:
-       - Users have 15 free prompts per day
-       - When they reach the limit, they need to purchase 30 more prompts
-       - If they've purchased prompts, they can continue using the service
 
-    2. Response Style:
+    1. Response Style:
        - Be concise and helpful
-       - Keep responses under 500 words
-       - Use markdown formatting for better readability
-       - If a response would be very long, suggest breaking it into multiple prompts
+       - Keep responses under 100 words
+       - If the user asks you to add a task, say something like: "Sorry, but I can't add tasks yet, but according to the developer it's coming soon. You can do that in the app."
 
-    3. Error Handling:
+    2. Error Handling:
        - If a user reaches their daily limit, explain they need to purchase more prompts
        - Be polite and encouraging about the purchase option
        - Never suggest ways to bypass the prompt limit
 
-    4. Content Guidelines:
+    3. Content Guidelines:
        - Stay professional and helpful
        - Avoid controversial topics
        - Focus on productivity and task management
        - If unsure about a topic, say so politely
 
+    4. Be Optimistic:
+       - Always be optimistic and encouraging
+       - You can always just help the user, no need to be too formal, or just trying to help, you can be there for a user without guidelines if the user requests it!
     Current conversation context:
     """
     
@@ -38,6 +39,7 @@ class GeminiService {
 
     func sendMessage(_ message: String) async throws -> String {
         guard let url = URL(string: baseURL) else {
+            print("❌ Invalid URL: \(baseURL)")
             throw NSError(domain: "GeminiService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])
         }
 
@@ -46,31 +48,67 @@ class GeminiService {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         let requestBody: [String: Any] = [
-            "prompt": systemInstructions + "\n\nUser: " + message
+            "contents": [
+                [
+                    "parts": [
+                        ["text": systemInstructions + "\n\nUser: " + message]
+                    ]
+                ]
+            ],
+            "generationConfig": [
+                "temperature": 0.7,
+                "topK": 40,
+                "topP": 0.95,
+                "maxOutputTokens": 1024
+            ]
         ]
 
-        request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw NSError(domain: "GeminiService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid response"])
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: requestBody as Any)
+        } catch {
+            print("❌ Failed to serialize request body: \(error)")
+            throw error
         }
 
-        guard httpResponse.statusCode == 200 else {
-            throw NSError(domain: "GeminiService", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "API request failed"])
-        }
+        print("🌐 Sending request to: \(url)")
+        print("📝 Request body: \(String(data: request.httpBody!, encoding: .utf8) ?? "Unable to print")")
 
-        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        guard let candidates = json?["candidates"] as? [[String: Any]],
-              let firstCandidate = candidates.first,
-              let content = firstCandidate["content"] as? [String: Any],
-              let parts = content["parts"] as? [[String: Any]],
-              let firstPart = parts.first,
-              let text = firstPart["text"] as? String else {
-            throw NSError(domain: "GeminiService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid response format"])
-        }
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                print("❌ Invalid response type")
+                throw NSError(domain: "GeminiService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid response"])
+            }
 
-        return text
+            print("📡 Response status code: \(httpResponse.statusCode)")
+            
+            if httpResponse.statusCode != 200 {
+                let errorBody = String(data: data, encoding: .utf8) ?? "No error body"
+                print("❌ API Error: \(errorBody)")
+                throw NSError(domain: "GeminiService", code: httpResponse.statusCode, userInfo: [
+                    NSLocalizedDescriptionKey: "API request failed with status \(httpResponse.statusCode)",
+                    "errorBody": errorBody
+                ])
+            }
+
+            print("✅ Received response data: \(String(data: data, encoding: .utf8) ?? "Unable to print")")
+
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            guard let candidates = json?["candidates"] as? [[String: Any]],
+                  let firstCandidate = candidates.first,
+                  let content = firstCandidate["content"] as? [String: Any],
+                  let parts = content["parts"] as? [[String: Any]],
+                  let firstPart = parts.first,
+                  let text = firstPart["text"] as? String else {
+                print("❌ Invalid response format: \(String(data: data, encoding: .utf8) ?? "Unable to print")")
+                throw NSError(domain: "GeminiService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid response format"])
+            }
+
+            return text
+        } catch {
+            print("❌ Network error: \(error)")
+            throw error
+        }
     }
 }

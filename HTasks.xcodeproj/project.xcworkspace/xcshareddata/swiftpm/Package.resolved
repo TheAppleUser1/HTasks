@@ -1,5 +1,5 @@
 {
-  "originHash" : "c63c63846d9c539229e96de38d6af51417e28c0ee9a0bc48bd0f0f19d923c329",
+  "originHash" : "858cd62b49a635302a3531f00457c319327b904269cdec3c98fb125f2e8042df",
   "pins" : [
     {
       "identity" : "abseil-cpp-binary",
@@ -116,6 +116,15 @@
       "state" : {
         "revision" : "d72aed98f8253ec1aa9ea1141e28150f408cf17f",
         "version" : "1.29.0"
+      }
+    },
+    {
+      "identity" : "swiftglass",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/1998code/SwiftGlass.git",
+      "state" : {
+        "revision" : "85ebac895eec35925c0821c93a83f22d796eeb8a",
+        "version" : "1.8.0"
       }
     }
   ],

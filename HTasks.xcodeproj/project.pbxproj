@@ -7,7 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		180236862DBAB02A00B572E4 /* SwiftGlass in Frameworks */ = {isa = PBXBuildFile; productRef = 180236852DBAB02A00B572E4 /* SwiftGlass */; };
 		1865328D2DB2D1FA00747D35 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = 1865328C2DB2D1FA00747D35 /* FirebaseMessaging */; };
+		18A863732DB8E608008D2921 /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 18A863722DB8E608008D2921 /* StoreKit.framework */; };
 		18C7A4CE2DB2452900E340C0 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 18C7A4CD2DB2452900E340C0 /* FirebaseAuth */; };
 		18C7A4D02DB2452900E340C0 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 18C7A4CF2DB2452900E340C0 /* FirebaseCore */; };
 		18C7A4D22DB2452900E340C0 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 18C7A4D12DB2452900E340C0 /* FirebaseFirestore */; };
@@ -48,6 +50,7 @@
 		182DBF2E2D98571A006F64D4 /* HTasks.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HTasks.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		182DBF3E2D98571C006F64D4 /* HTasksTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HTasksTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		182DBF482D98571C006F64D4 /* HTasksUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HTasksUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		18A863722DB8E608008D2921 /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -76,7 +79,9 @@
 				18C7A4D02DB2452900E340C0 /* FirebaseCore in Frameworks */,
 				18C7A4D42DB2452900E340C0 /* FirebaseStorage in Frameworks */,
 				1865328D2DB2D1FA00747D35 /* FirebaseMessaging in Frameworks */,
+				18A863732DB8E608008D2921 /* StoreKit.framework in Frameworks */,
 				18C7A4CE2DB2452900E340C0 /* FirebaseAuth in Frameworks */,
+				180236862DBAB02A00B572E4 /* SwiftGlass in Frameworks */,
 				18C7A4D22DB2452900E340C0 /* FirebaseFirestore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -122,6 +127,7 @@
 		186532892DB2CFE400747D35 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				18A863722DB8E608008D2921 /* StoreKit.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -152,6 +158,7 @@
 				18C7A4D12DB2452900E340C0 /* FirebaseFirestore */,
 				18C7A4D32DB2452900E340C0 /* FirebaseStorage */,
 				1865328C2DB2D1FA00747D35 /* FirebaseMessaging */,
+				180236852DBAB02A00B572E4 /* SwiftGlass */,
 			);
 			productName = HTasks;
 			productReference = 182DBF2E2D98571A006F64D4 /* HTasks.app */;
@@ -237,6 +244,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				18C7A4CC2DB2452900E340C0 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+				180236842DBAB02A00B572E4 /* XCRemoteSwiftPackageReference "SwiftGlass" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 182DBF2F2D98571A006F64D4 /* Products */;
@@ -436,13 +444,12 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = HTasks/HTasks.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
-				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 1;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_ASSET_PATHS = "\"HTasks/Preview Content\"";
-				DEVELOPMENT_TEAM = "";
-				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = 9HVX28ZL3Z;
+				DEVELOPMENT_TEAM = 9HVX28ZL3Z;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "H!Tasks";
@@ -458,11 +465,10 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 4.0.0;
+				MARKETING_VERSION = 4.1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.golobiczadaniel.HTasks;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
-				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = AppStoreHTasks;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -474,13 +480,12 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = HTasks/HTasks.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
-				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 1;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_ASSET_PATHS = "\"HTasks/Preview Content\"";
-				DEVELOPMENT_TEAM = "";
-				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = 9HVX28ZL3Z;
+				DEVELOPMENT_TEAM = 9HVX28ZL3Z;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "H!Tasks";
@@ -496,11 +501,10 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 4.0.0;
+				MARKETING_VERSION = 4.1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.golobiczadaniel.HTasks;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
-				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = AppStoreHTasks;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -621,6 +625,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		180236842DBAB02A00B572E4 /* XCRemoteSwiftPackageReference "SwiftGlass" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/1998code/SwiftGlass.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.8.0;
+			};
+		};
 		18C7A4CC2DB2452900E340C0 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
@@ -632,6 +644,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		180236852DBAB02A00B572E4 /* SwiftGlass */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 180236842DBAB02A00B572E4 /* XCRemoteSwiftPackageReference "SwiftGlass" */;
+			productName = SwiftGlass;
+		};
 		1865328C2DB2D1FA00747D35 /* FirebaseMessaging */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 18C7A4CC2DB2452900E340C0 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
