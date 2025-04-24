@@ -12,75 +12,57 @@ struct FeedView: View {
     @State private var errorMessage: String?
     
     var body: some View {
-        ZStack {
-            VStack(spacing: 0) {
-                // Custom Top Bar
-                HStack(spacing: 16) {
-                    Text("Feed")
-                        .font(.title)
-                        .fontWeight(.bold)
-                        .foregroundColor(colorScheme == .dark ? .white : .black)
-                        .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
-                    
-                    Spacer()
-                    
-                    if firebaseService.isAuthenticated {
-                        Button(action: {
-                            showingNewPostSheet = true
-                        }) {
-                            Image(systemName: "square.and.pencil")
-                                .font(.title3)
-                                .foregroundColor(colorScheme == .dark ? .white : .black)
+        VStack(spacing: 20) {
+            Text("Social Feed")
+                .font(.title)
+                .fontWeight(.bold)
+                .foregroundColor(colorScheme == .dark ? .white : .black)
+                .padding(.top)
+            
+            if firebaseService.isAuthenticated {
+                ScrollView {
+                    VStack(spacing: 16) {
+                        ForEach(posts) { post in
+                            PostCard(post: post)
+                                .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial, gradientOpacity: 0.15)
                         }
-                        .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
-                    } else {
-                        Button(action: {
-                            showingAuthSheet = true
-                        }) {
-                            Text("Sign In")
-                                .font(.headline)
-                                .foregroundColor(colorScheme == .dark ? .white : .black)
-                        }
-                        .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
                     }
+                    .padding()
+                }
+            } else {
+                VStack(spacing: 20) {
+                    Text("Sign in to see what others are up to!")
+                        .font(.headline)
+                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
+                        .multilineTextAlignment(.center)
+                    
+                    Button(action: { showingAuthSheet = true }) {
+                        Text("Sign In")
+                            .font(.headline)
+                            .foregroundColor(colorScheme == .dark ? .black : .white)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(colorScheme == .dark ? .white : .black)
+                            )
+                    }
+                    .padding(.horizontal)
                 }
                 .padding()
-                
-                if let error = errorMessage {
-                    Text(error)
-                        .foregroundColor(.red)
-                        .padding()
-                        .glass(radius: 12, color: .red, material: .regularMaterial, gradientOpacity: 0.3)
-                }
-                
-                if isLoading {
-                    ProgressView()
-                        .padding()
-                        .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
-                } else {
-                    ScrollView {
-                        LazyVStack(spacing: 16) {
-                            ForEach(posts) { post in
-                                PostCard(post: post, onLike: {
-                                    likePost(post)
-                                })
-                            }
-                        }
-                        .padding()
-                    }
-                }
+                .glass(radius: 16, color: colorScheme == .dark ? .white : .black, material: .regularMaterial, gradientOpacity: 0.15)
             }
-            .background(
-                LinearGradient(
-                    gradient: Gradient(colors: colorScheme == .dark ? 
-                                      [Color.black, Color.blue.opacity(0.2)] : 
-                                      [Color.white, Color.blue.opacity(0.1)]),
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .edgesIgnoringSafeArea(.all)
-            )
         }
+        .background(
+            LinearGradient(
+                gradient: Gradient(colors: colorScheme == .dark ?
+                                  [Color.black, Color.blue.opacity(0.2)] :
+                                  [Color.white, Color.blue.opacity(0.1)]),
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+        )
         .sheet(isPresented: $showingNewPostSheet) {
             NewPostView(onPost: { content in
                 createPost(content: content)
@@ -148,7 +130,6 @@ struct FeedView: View {
 
 struct PostCard: View {
     let post: Post
-    let onLike: () -> Void
     @Environment(\.colorScheme) var colorScheme
     @State private var showingComments = false
     
@@ -167,17 +148,6 @@ struct PostCard: View {
                 .font(.body)
             
             HStack {
-                Button(action: onLike) {
-                    HStack {
-                        Image(systemName: "heart.fill")
-                            .foregroundColor(.red)
-                        Text("\(post.likes)")
-                    }
-                }
-                .glass(radius: 12, color: .red, material: .regularMaterial, gradientOpacity: 0.3)
-                
-                Spacer()
-                
                 Button(action: { showingComments = true }) {
                     HStack {
                         Image(systemName: "bubble.right")

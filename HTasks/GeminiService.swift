@@ -3,7 +3,7 @@ import Foundation
 class GeminiService {
     static let shared = GeminiService()
     
-    private let apiKey = "AIzaSyDHXGA4eOKAw6PYS83RCdwveTWLg7_BHEQ"
+    private let apiKey = "placeholder"
     
     private var baseURL: String {
         "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=\(apiKey)"

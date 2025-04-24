@@ -3,6 +3,7 @@ import FirebaseCore
 import FirebaseAuth
 import FirebaseFirestore
 import FirebaseStorage
+import FirebaseFirestoreSwift
 
 class FirebaseService: ObservableObject {
     static let shared = FirebaseService()
@@ -11,91 +12,69 @@ class FirebaseService: ObservableObject {
     
     @Published var currentUser: User?
     @Published var isAuthenticated = false
+    @Published var userPrompts: Int = 15
+    @Published var lastPromptReset: Date?
     
     private init() {
         setupFirebase()
+        setupAuthStateListener()
     }
     
     private func setupFirebase() {
         // Firebase is configured in HTasksApp.swift
     }
     
+    private func setupAuthStateListener() {
+        Auth.auth().addStateDidChangeListener { [weak self] _, user in
+            DispatchQueue.main.async {
+                self?.isAuthenticated = user != nil
+                self?.currentUser = user
+                if let user = user {
+                    self?.loadUserPromptData(userId: user.uid)
+                }
+            }
+        }
+    }
+    
     // MARK: - Authentication
     
-    func signIn(email: String, password: String, completion: @escaping (Result<User, Error>) -> Void) {
-        Auth.auth().signIn(withEmail: email, password: password) { [weak self] result, error in
+    func signIn(email: String, password: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        Auth.auth().signIn(withEmail: email, password: password) { result, error in
             if let error = error {
                 completion(.failure(error))
                 return
             }
-            
-            if let user = result?.user {
-                self?.currentUser = user
-                self?.isAuthenticated = true
-                completion(.success(user))
-            }
+            completion(.success(()))
         }
     }
     
-    func signUp(email: String, password: String, username: String, completion: @escaping (Result<User, Error>) -> Void) {
-        print("Attempting to sign up user with email: \(email)")
-        
-        // Validate input
-        guard !email.isEmpty, !password.isEmpty, !username.isEmpty else {
-            let error = NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "All fields are required"])
-            print("Sign up error: Empty fields")
-            completion(.failure(error))
-            return
-        }
-        
+    func signUp(email: String, password: String, username: String, completion: @escaping (Result<Void, Error>) -> Void) {
         Auth.auth().createUser(withEmail: email, password: password) { [weak self] result, error in
             if let error = error {
-                print("Firebase Auth error (raw): \(error)")
-                print("Firebase Auth error (localized): \(error.localizedDescription)")
                 completion(.failure(error))
                 return
             }
             
-            guard let user = result?.user else {
-                let error = NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to create user"])
-                print("Sign up error: No user returned")
-                completion(.failure(error))
+            guard let userId = result?.user.uid else {
+                completion(.failure(NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to get user ID"])))
                 return
             }
             
-            // Create user profile in Firestore
-            let userData: [String: Any] = [
+            self?.createUserDocument(userId: userId, data: [
                 "username": username,
                 "email": email,
-                "createdAt": FieldValue.serverTimestamp()
-            ]
+                "settings": UserSettings.defaultSettings,
+                "promptsRemaining": 15,
+                "lastPromptReset": Date(),
+                "createdAt": Date()
+            ])
             
-            print("Creating user profile in Firestore for user: \(user.uid)")
-            self?.db.collection("users").document(user.uid).setData(userData) { error in
-                if let error = error {
-                    print("Firestore error: \(error.localizedDescription)")
-                    // Try to delete the auth user if Firestore creation fails
-                    user.delete { error in
-                        if let error = error {
-                            print("Failed to delete auth user after Firestore error: \(error.localizedDescription)")
-                        }
-                    }
-                    completion(.failure(error))
-                    return
-                }
-                
-                print("Successfully created user profile")
-                self?.currentUser = user
-                self?.isAuthenticated = true
-                completion(.success(user))
-            }
+            completion(.success(()))
         }
     }
     
-    func signOut() throws {
-        try Auth.auth().signOut()
-        currentUser = nil
-        isAuthenticated = false
+    func signOut() {
+        try? Auth.auth().signOut()
     }
     
     // MARK: - User Profile
@@ -126,6 +105,132 @@ class FirebaseService: ObservableObject {
                 }
             } else {
                 print("Successfully updated FCM token.")
+            }
+        }
+    }
+    
+    // MARK: - User Data Management
+    
+    func createUserDocument(userId: String, data: [String: Any]) {
+        db.collection("users").document(userId).setData(data) { error in
+            if let error = error {
+                print("Error creating user document: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    func fetchUserTasks(userId: String, completion: @escaping (Result<[HTTask], Error>) -> Void) {
+        db.collection("users").document(userId).collection("tasks").getDocuments { snapshot, error in
+            if let error = error {
+                completion(.failure(error))
+                return
+            }
+            
+            let tasks = snapshot?.documents.compactMap { document -> HTTask? in
+                try? document.data(as: HTTask.self)
+            } ?? []
+            
+            completion(.success(tasks))
+        }
+    }
+    
+    func saveTask(_ task: HTTask, userId: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        do {
+            try db.collection("users").document(userId).collection("tasks").document(task.id.uuidString).setData(from: task)
+            completion(.success(()))
+        } catch {
+            completion(.failure(error))
+        }
+    }
+    
+    func deleteTask(_ task: HTTask, userId: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        db.collection("users").document(userId).collection("tasks").document(task.id.uuidString).delete { error in
+            if let error = error {
+                completion(.failure(error))
+            } else {
+                completion(.success(()))
+            }
+        }
+    }
+    
+    func fetchUserSettings(userId: String, completion: @escaping (Result<UserSettings, Error>) -> Void) {
+        db.collection("users").document(userId).getDocument { document, error in
+            if let error = error {
+                completion(.failure(error))
+                return
+            }
+            
+            guard let data = document?.data()?["settings"] as? [String: Any],
+                  let settings = try? UserSettings.from(dictionary: data) else {
+                completion(.failure(NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to decode settings"])))
+                return
+            }
+            
+            completion(.success(settings))
+        }
+    }
+    
+    func saveUserSettings(_ settings: UserSettings, userId: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        db.collection("users").document(userId).updateData([
+            "settings": settings.toDictionary()
+        ]) { error in
+            if let error = error {
+                completion(.failure(error))
+            } else {
+                completion(.success(()))
+            }
+        }
+    }
+    
+    // MARK: - AI Prompts Management
+    
+    private func loadUserPromptData(userId: String) {
+        db.collection("users").document(userId).getDocument { [weak self] document, error in
+            guard let document = document,
+                  let promptsRemaining = document.data()?["promptsRemaining"] as? Int,
+                  let lastResetTimestamp = document.data()?["lastPromptReset"] as? Timestamp else {
+                return
+            }
+            
+            let lastReset = lastResetTimestamp.dateValue()
+            if !Calendar.current.isDate(lastReset, inSameDayAs: Date()) {
+                // Reset prompts if it's a new day
+                self?.resetDailyPrompts(userId: userId)
+            } else {
+                self?.userPrompts = promptsRemaining
+                self?.lastPromptReset = lastReset
+            }
+        }
+    }
+    
+    func usePrompt(userId: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        guard userPrompts > 0 else {
+            completion(.failure(NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "No prompts remaining"])))
+            return
+        }
+        
+        db.collection("users").document(userId).updateData([
+            "promptsRemaining": FieldValue.increment(Int64(-1))
+        ]) { error in
+            if let error = error {
+                completion(.failure(error))
+            } else {
+                self.userPrompts -= 1
+                completion(.success(()))
+            }
+        }
+    }
+    
+    private func resetDailyPrompts(userId: String) {
+        let data: [String: Any] = [
+            "promptsRemaining": 15,
+            "lastPromptReset": Date()
+        ]
+        
+        db.collection("users").document(userId).updateData(data) { [weak self] error in
+            if error == nil {
+                self?.userPrompts = 15
+                self?.lastPromptReset = Date()
             }
         }
     }
@@ -342,4 +447,53 @@ struct Comment: Identifiable {
     let content: String
     let author: String
     let timestamp: Date
+}
+
+// Helper extension for UserSettings
+extension UserSettings {
+    func toDictionary() -> [String: Any] {
+        [
+            "name": name,
+            "streak": streak,
+            "totalTasksCompleted": totalTasksCompleted,
+            "lastLoginDate": lastLoginDate,
+            "notificationsEnabled": notificationsEnabled,
+            "theme": theme,
+            "taskCategories": taskCategories.map { $0.rawValue },
+            "showDeleteConfirmation": showDeleteConfirmation,
+            "deleteConfirmationText": deleteConfirmationText,
+            "showSocialFeatures": showSocialFeatures
+        ]
+    }
+    
+    static func from(dictionary: [String: Any]) throws -> UserSettings {
+        guard let name = dictionary["name"] as? String,
+              let streak = dictionary["streak"] as? Int,
+              let totalTasksCompleted = dictionary["totalTasksCompleted"] as? Int,
+              let lastLoginDate = dictionary["lastLoginDate"] as? Date,
+              let notificationsEnabled = dictionary["notificationsEnabled"] as? Bool,
+              let theme = dictionary["theme"] as? String,
+              let categoryStrings = dictionary["taskCategories"] as? [String],
+              let showDeleteConfirmation = dictionary["showDeleteConfirmation"] as? Bool,
+              let deleteConfirmationText = dictionary["deleteConfirmationText"] as? String,
+              let showSocialFeatures = dictionary["showSocialFeatures"] as? Bool else {
+            throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid dictionary format"])
+        }
+        
+        let categories = categoryStrings.compactMap { TaskCategory(rawValue: $0) }
+        
+        return UserSettings(
+            name: name,
+            streak: streak,
+            totalTasksCompleted: totalTasksCompleted,
+            lastLoginDate: lastLoginDate,
+            notificationsEnabled: notificationsEnabled,
+            theme: theme,
+            taskCategories: categories,
+            showDeleteConfirmation: showDeleteConfirmation,
+            deleteConfirmationText: deleteConfirmationText,
+            stats: TaskStats(),
+            showSocialFeatures: showSocialFeatures
+        )
+    }
 } 

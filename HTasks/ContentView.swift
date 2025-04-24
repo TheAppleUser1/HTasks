@@ -298,6 +298,7 @@ struct UserSettings: Codable {
 struct ContentView: View {
     @State private var isWelcomeActive = true
     @State private var tasks: [HTTask] = []
+    @StateObject private var firebaseService = FirebaseService.shared
     @Environment(\.colorScheme) var colorScheme
     
     init() {
@@ -307,7 +308,9 @@ struct ContentView: View {
     
     var body: some View {
         NavigationView {
-            if isWelcomeActive {
+            if !firebaseService.isAuthenticated {
+                AuthView()
+            } else if isWelcomeActive {
                 WelcomeView(tasks: $tasks, isWelcomeActive: $isWelcomeActive)
             } else {
                 HomeView(tasks: $tasks)
@@ -315,38 +318,42 @@ struct ContentView: View {
         }
         .navigationViewStyle(StackNavigationViewStyle())
         .onAppear {
-            loadTasks()
-            
-            // Request notification permissions when app starts
-            UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound, .provisional]) { granted, error in
-                if granted {
-                    print("DEBUG: Notification permission granted")
-                } else if let error = error {
-                    print("DEBUG: Notification permission error: \(error.localizedDescription)")
-                }
-            }
-            
-            // Check if we should skip welcome screen
-            let hasSeenWelcome = UserDefaults.standard.bool(forKey: "hasSeenWelcome")
-            if hasSeenWelcome && !tasks.isEmpty {
-                isWelcomeActive = false
+            if firebaseService.isAuthenticated {
+                loadUserData()
             }
         }
     }
     
-    private func loadTasks() {
-        if let savedTasks = UserDefaults.standard.data(forKey: "savedTasks") {
-            do {
-                let decodedTasks = try JSONDecoder().decode([HTTask].self, from: savedTasks)
-                self.tasks = decodedTasks
-                
-                // Log for debugging
-                print("Loaded \(decodedTasks.count) tasks from UserDefaults")
-            } catch {
-                print("Failed to decode tasks: \(error.localizedDescription)")
+    private func loadUserData() {
+        guard let userId = firebaseService.currentUser?.uid else { return }
+        
+        // Load user's tasks
+        firebaseService.fetchUserTasks(userId: userId) { result in
+            switch result {
+            case .success(let fetchedTasks):
+                self.tasks = fetchedTasks
+            case .failure(let error):
+                print("Error loading tasks: \(error.localizedDescription)")
             }
-        } else {
-            print("No saved tasks found in UserDefaults")
+        }
+        
+        // Load user settings
+        firebaseService.fetchUserSettings(userId: userId) { result in
+            switch result {
+            case .success(let settings):
+                // Update settings in UserDefaults
+                if let encoded = try? JSONEncoder().encode(settings) {
+                    UserDefaults.standard.set(encoded, forKey: "userSettings")
+                }
+            case .failure(let error):
+                print("Error loading settings: \(error.localizedDescription)")
+            }
+        }
+        
+        // Check if we should skip welcome screen
+        let hasSeenWelcome = UserDefaults.standard.bool(forKey: "hasSeenWelcome")
+        if hasSeenWelcome && !tasks.isEmpty {
+            isWelcomeActive = false
         }
     }
 }
@@ -652,7 +659,7 @@ struct HomeView: View {
     
     var body: some View {
         ZStack {
-            // Background gradient
+            // Background gradient FIRST
             LinearGradient(
                 gradient: Gradient(colors: colorScheme == .dark ? 
                                   [Color.black, Color.blue.opacity(0.2)] : 
@@ -662,33 +669,33 @@ struct HomeView: View {
             )
             .ignoresSafeArea()
 
-            // Content
-            VStack(spacing: 0) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Number of tasks done this week:")
-                        .font(.headline)
-                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
-                    
-                    HStack(alignment: .bottom, spacing: 8) {
-                        Text("\(completedTasksCount)")
-                            .font(.system(size: 60, weight: .bold, design: .rounded))
-                            .foregroundColor(colorScheme == .dark ? .white : .black)
+            // Main content
+            ScrollView {
+                VStack(spacing: 0) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Number of tasks done this week:")
+                            .font(.headline)
+                            .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
                         
-                        if completedTasksCount == 0 {
-                            Text("u lazy or sum?")
-                                .font(.system(size: 12))
-                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .black.opacity(0.6))
-                                .padding(.bottom, 12)
+                        HStack(alignment: .bottom, spacing: 8) {
+                            Text("\(completedTasksCount)")
+                                .font(.system(size: 60, weight: .bold, design: .rounded))
+                                .foregroundColor(colorScheme == .dark ? .white : .black)
+                            
+                            if completedTasksCount == 0 {
+                                Text("u lazy or sum?")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .black.opacity(0.6))
+                                    .padding(.bottom, 12)
+                            }
                         }
                     }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding()
-                .glass(radius: 16, color: colorScheme == .dark ? .white : .black, material: .regularMaterial, gradientOpacity: 0.3)
-                .padding(.horizontal)
-                .padding(.top)
-                
-                List {
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding()
+                    .glass(radius: 16, color: colorScheme == .dark ? .white : .black, material: .regularMaterial, gradientOpacity: 0.15)
+                    .padding(.horizontal)
+                    .padding(.top)
+                    
                     ForEach(tasks) { task in
                         TaskRow(task: task, onToggle: {
                             toggleTaskCompletion(task)
@@ -700,101 +707,82 @@ struct HomeView: View {
                                 deleteTask(task)
                             }
                         })
+                        .padding(.horizontal)
+                        .padding(.vertical, 4)
                     }
                 }
-                .listStyle(PlainListStyle())
-                .scrollContentBackground(.hidden)
+            }
+            .background(Color.clear)
 
-                // Bottom Tab Bar
-                HStack(spacing: 0) {
+            // Bottom tab bar overlay
+            VStack {
+                Spacer()
+                HStack {
                     Spacer()
-                    Button(action: {
-                        showingStatisticsSheet = true
-                    }) {
-                        VStack {
-                            Image(systemName: "chart.bar.fill")
-                                .font(.title2)
-                                .foregroundColor(colorScheme == .dark ? .black : .black)
-                        }
-                        .frame(width: 60, height: 60)
+                    Button(action: { showingStatisticsSheet = true }) {
+                        Image(systemName: "chart.bar.fill")
+                            .font(.title2)
+                            .foregroundColor(.black)
                     }
-                    .glass(radius: 30, color: colorScheme == .dark ? .white : .white, material: .regularMaterial, gradientOpacity: 0.3)
-
+                    .frame(width: 60, height: 60)
+                    .glass(radius: 30, color: .white, material: .regularMaterial, gradientOpacity: 0.15)
+                    
                     Spacer()
                     
-                    Button(action: {
-                        showingChatSheet = true
-                    }) {
-                        VStack {
-                            Image(systemName: "bubble.left.fill")
-                                .font(.title2)
-                                .foregroundColor(colorScheme == .dark ? .black : .black)
-                        }
-                        .frame(width: 60, height: 60)
+                    Button(action: { showingChatSheet = true }) {
+                        Image(systemName: "bubble.left.fill")
+                            .font(.title2)
+                            .foregroundColor(.black)
                     }
-                    .glass(radius: 30, color: colorScheme == .dark ? .white : .white, material: .regularMaterial, gradientOpacity: 0.3)
-
+                    .frame(width: 60, height: 60)
+                    .glass(radius: 30, color: .white, material: .regularMaterial, gradientOpacity: 0.15)
+                    
                     Spacer()
                     
                     if settings.showSocialFeatures {
-                        Button(action: {
-                            showingFeedSheet = true
-                        }) {
-                            VStack {
-                                Image(systemName: "newspaper.fill")
-                                    .font(.title2)
-                                    .foregroundColor(colorScheme == .dark ? .black : .black)
-                            }
-                            .frame(width: 60, height: 60)
+                        Button(action: { showingFeedSheet = true }) {
+                            Image(systemName: "newspaper.fill")
+                                .font(.title2)
+                                .foregroundColor(.black)
                         }
-                        .glass(radius: 30, color: colorScheme == .dark ? .white : .white, material: .regularMaterial, gradientOpacity: 0.3)
-
+                        .frame(width: 60, height: 60)
+                        .glass(radius: 30, color: .white, material: .regularMaterial, gradientOpacity: 0.15)
+                        
                         Spacer()
                     }
                     
-                    Button(action: {
-                        showingAddTaskSheet = true
-                    }) {
-                        VStack {
-                            Image(systemName: "plus")
-                                .font(.title2)
-                                .foregroundColor(colorScheme == .dark ? .black : .black)
-                        }
-                        .frame(width: 60, height: 60)
+                    Button(action: { showingAddTaskSheet = true }) {
+                        Image(systemName: "plus")
+                            .font(.title2)
+                            .foregroundColor(.black)
                     }
-                    .glass(radius: 30, color: colorScheme == .dark ? .white : .white, material: .regularMaterial, gradientOpacity: 0.3)
+                    .frame(width: 60, height: 60)
+                    .glass(radius: 30, color: .white, material: .regularMaterial, gradientOpacity: 0.15)
+                    
                     Spacer()
                 }
-                .padding(.vertical, 20)
+                .padding(.bottom, 20)
             }
         }
         .navigationTitle("My Tasks")
         .navigationBarItems(trailing: HStack(spacing: 16) {
-            Button(action: {
-                showingAchievementsSheet = true
-            }) {
-                VStack {
-                    Image(systemName: "trophy.fill")
-                        .font(.title2)
-                        .foregroundColor(colorScheme == .dark ? .white : .black)
-                }
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
+            Button(action: { showingAchievementsSheet = true }) {
+                Image(systemName: "trophy.fill")
+                    .font(.title2)
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                    .frame(width: 32, height: 32)
             }
-            .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial, gradientOpacity: 0.3)
+            .frame(width: 44, height: 44)
+            .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial, gradientOpacity: 0.15)
             
-            Button(action: {
-                showingSettingsSheet = true
-            }) {
-                VStack {
-                    Image(systemName: "gear")
-                        .font(.title2)
-                        .foregroundColor(colorScheme == .dark ? .white : .black)
-                }
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
+            Button(action: { showingSettingsSheet = true }) {
+                Image(systemName: "gear")
+                    .font(.title2)
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                    .frame(width: 32, height: 32)
             }
-            .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial, gradientOpacity: 0.3)
+            .frame(width: 44, height: 44)
+            .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial, gradientOpacity: 0.15)
         })
         .sheet(isPresented: $showingAddTaskSheet) {
             VStack(spacing: 16) {
@@ -1268,7 +1256,7 @@ struct TaskRow: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(PlainButtonStyle())
-                .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial, gradientOpacity: 0.2)
+                .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial, gradientOpacity: 0.15)
                 
                 Button(action: onDelete) {
                     Image(systemName: "trash.fill")
@@ -1278,12 +1266,12 @@ struct TaskRow: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(PlainButtonStyle())
-                .glass(radius: 12, color: .red, material: .regularMaterial, gradientOpacity: 0.2)
+                .glass(radius: 12, color: .red, material: .regularMaterial, gradientOpacity: 0.15)
             }
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 12)
-        .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial, gradientOpacity: 0.2)
+        .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial, gradientOpacity: 0.15)
         .padding(.horizontal, 8)
     }
 }
@@ -1307,7 +1295,6 @@ struct StatisticsView: View {
                 .fontWeight(.bold)
                 .foregroundColor(colorScheme == .dark ? .white : .black)
                 .padding(.top, 20)
-                .glass(radius: 16, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
             
             Picker("Time Range", selection: $selectedTimeRange) {
                 ForEach(TimeRange.allCases, id: \.self) { range in
@@ -1316,16 +1303,16 @@ struct StatisticsView: View {
             }
             .pickerStyle(SegmentedPickerStyle())
             .padding(.horizontal)
-            .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
+            .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial, gradientOpacity: 0.15)
             
             ScrollView {
                 VStack(spacing: 20) {
                     // Streak Statistics
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Streak Stats")
-                        .font(.headline)
-                        .foregroundColor(colorScheme == .dark ? .white : .black)
-                    
+                            .font(.headline)
+                            .foregroundColor(colorScheme == .dark ? .white : .black)
+                        
                         HStack(spacing: 20) {
                             StatCard(
                                 title: "Current Streak",
@@ -1343,7 +1330,7 @@ struct StatisticsView: View {
                         }
                     }
                     .padding()
-                    .glass(radius: 16, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
+                    .glass(radius: 16, color: colorScheme == .dark ? .white : .black, material: .regularMaterial, gradientOpacity: 0.15)
                     
                     // Task Completion Stats
                     VStack(alignment: .leading, spacing: 12) {
@@ -1368,7 +1355,7 @@ struct StatisticsView: View {
                         }
                     }
                     .padding()
-                    .glass(radius: 16, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
+                    .glass(radius: 16, color: colorScheme == .dark ? .white : .black, material: .regularMaterial, gradientOpacity: 0.15)
                     
                     // Category Distribution
                     VStack(alignment: .leading, spacing: 12) {
@@ -1384,13 +1371,13 @@ struct StatisticsView: View {
                                     .foregroundColor(colorScheme == .dark ? .white : .black)
                                 Spacer()
                                 Text("\(settings.stats.completedByCategory[category] ?? 0)")
-                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
-                }
+                                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
+                            }
                             .padding(.vertical, 4)
                         }
                     }
                     .padding()
-                    .glass(radius: 16, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
+                    .glass(radius: 16, color: colorScheme == .dark ? .white : .black, material: .regularMaterial, gradientOpacity: 0.15)
                     
                     // Priority Distribution
                     VStack(alignment: .leading, spacing: 12) {
@@ -1405,7 +1392,7 @@ struct StatisticsView: View {
                                     .frame(width: 10, height: 10)
                                 Text(priority.rawValue)
                                     .foregroundColor(colorScheme == .dark ? .white : .black)
-                Spacer()
+                                Spacer()
                                 Text("\(settings.stats.completedByPriority[priority] ?? 0)")
                                     .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.7))
                             }
@@ -1413,7 +1400,7 @@ struct StatisticsView: View {
                         }
                     }
                     .padding()
-                    .glass(radius: 16, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
+                    .glass(radius: 16, color: colorScheme == .dark ? .white : .black, material: .regularMaterial, gradientOpacity: 0.15)
                 }
                 .padding()
             }
@@ -1426,7 +1413,7 @@ struct StatisticsView: View {
                 startPoint: .top,
                 endPoint: .bottom
             )
-            .edgesIgnoringSafeArea(.all)
+            .ignoresSafeArea()
         )
         .onAppear {
             loadSettings()
@@ -1460,13 +1447,13 @@ struct StatCard: View {
             }
             
             Text(value)
-                    .font(.title2)
+                .font(.title2)
                 .fontWeight(.bold)
                 .foregroundColor(colorScheme == .dark ? .white : .black)
-            }
+        }
         .frame(maxWidth: .infinity, alignment: .leading)
-            .padding()
-        .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial)
+        .padding()
+        .glass(radius: 12, color: colorScheme == .dark ? .white : .black, material: .regularMaterial, gradientOpacity: 0.15)
     }
 }
 
